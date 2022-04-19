@@ -37,7 +37,6 @@
     "fast-average-color": "^7.1.0",
     "fast-average-color-node": "^2.2.0",
     "http": "0.0.1-security",
-    "image-resize": "^1.2.6",
     "jimp": "^0.16.1",
     "mithril": "^2.0.4",
     "path": "^0.12.7",
@@ -46,7 +45,6 @@
     "postcss-easings": "^3.0.1",
     "postcss-loader": "^4.1.0",
     "process": "^0.11.10",
-    "sharp": "^0.30.4",
     "stylelint-config-rational-order": "^0.1.2",
     "stylelint-config-standard": "^20.0.0",
     "unirest": "^0.6.0",
@@ -76,7 +74,6 @@
     "webpack-cli": "^4.3.1",
     "webpack-deadcode-plugin": "^0.1.12",
     "webpack-dev-server": "^3.11.1",
-    "webpack-sharp-loader": "^1.0.4",
     "zlib": "^1.0.5"
   }
 }
