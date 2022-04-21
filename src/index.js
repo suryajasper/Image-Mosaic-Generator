@@ -10,7 +10,7 @@ function importAll(r) {
   return r.keys().map(r);
 }
 
-const images = importAll(require.context('./imgs/', false, /\.(png|jpe?g)$/));
+const images = importAll(require.context('./carol_imgs/', false, /\.(png|jpe?g)$/));
 console.log(images);
 
 class Main {
@@ -44,8 +44,8 @@ class Main {
   }
 
   reload(image) {
-    let new_height = 60;
-    let new_width = 100;
+    let new_height = 90;
+    let new_width = 90;
 
     //window.onresize = m.redraw;
 
@@ -89,27 +89,19 @@ class Main {
       .catch(console.error)
   }
 
+  getImgSize() {
+
+    let height = this.bitmap.length;
+    let width = this.bitmap[0].length;
+
+    if (width/height < window.innerWidth/window.innerHeight)
+      return `${Math.ceil(window.innerHeight / height)}px`;
+
+    return `${Math.round(window.innerWidth / width)}px`
+  }
+
   view(vnode) {
     return [
-
-      /*
-
-      m('input', {type: 'color', onchange: e => {
-        this.color = colors[closestColor( hexToRGB( e.target.value ) )].color;
-        console.log(this.color);
-      }}),
-      m('div.color-preview', {style: {'background-color': `rgb(${this.color[0]}, ${this.color[1]}, ${this.color[2]})`} }),
-
-      m('div.preview-list', colors.map(({img, color}) => [
-        m('img', {src: img}),
-        m('div.color-preview', {style: {'background-color': `rgb(${color[0]},${color[1]},${color[2]})`} }),
-        m('br'),
-      ])),
-
-      /*m(WordArt, { text: "holy shit", oncomplete: image => {
-        this.image = image;
-        m.redraw();
-      } }),*/
 
       m("div", {
 
@@ -122,7 +114,7 @@ class Main {
       m('div', {class: 'image-grid', style: `grid-template-columns: repeat(${this.bitmap[0].length}, 1fr)`}, this.bitmap.map(
         (row, r) => row.map((pixel, c) => {
           return m('img', {style: {
-            width: `${Math.ceil(window.innerWidth / row.length)}px`
+            width: this.getImgSize()
           }, src: this.bitmap[r][c]});
         })
       )),
