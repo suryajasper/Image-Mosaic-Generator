@@ -2,7 +2,7 @@ import m from 'mithril';
 import './css/main.scss';
 import WordArt from './wordart';
 import Jimp from 'jimp';
-import { colors, closestColor, hexToRGB, rgbObjToArr } from './color';
+import { colors, closestColor, hexToRGB, rgbaObjToCss, rgbObjToArr, rgbArrToObj } from './color';
 import { init2D } from './utils';
 
 function importAll(r) {
@@ -10,7 +10,7 @@ function importAll(r) {
   return r.keys().map(r);
 }
 
-const images = importAll(require.context('./carol_imgs/', false, /\.(png|jpe?g)$/));
+const images = importAll(require.context('./background_imgs/carol_imgs/', false, /\.(png|jpe?g)$/));
 console.log(images);
 
 class Main {
@@ -19,33 +19,34 @@ class Main {
     this.src = '';
     this.color = '';
     this.bitmap = [[]];
-
-    console.log(colors[closestColor([104, 213, 104])]);
+    this.tintlayer = [[]];
+    this.scale = 1;
   }
-
+  
   handleDrop(e) {
     e.preventDefault();
-    console.log('dropped');
-
-    console.log(e)
-
+    
     var FR = new FileReader();
     
     FR.readAsDataURL( e.dataTransfer.files[0] );
-
+    
     FR.addEventListener("load", ev => {
       this.reload(ev.target.result);
     }); 
     
   }
-
+  
   oninit(vnode) {
-    this.reload(images[Math.floor(Math.random()*images.length)]);
+    this.imgIndex = Math.floor(Math.random()*images.length);
+    this.reload(images[this.imgIndex]);
   }
 
   reload(image) {
-    let new_height = 90;
-    let new_width = 90;
+    const RESOLUTION = 85;
+
+    let new_height = RESOLUTION;
+    let new_width = RESOLUTION;
+    let tint_layer_alpha = 0.0;
 
     //window.onresize = m.redraw;
 
@@ -80,10 +81,35 @@ class Main {
                 .img
             )
           );
+        
+        this.tintlayer = init2D(resized.bitmap.height, resized.bitmap.width)
+          .map((row, r) => 
+            row.map((_, c) => 
+              /*rgbaObjToCss(
+                Jimp.intToRGBA(
+                  resized.getPixelColor(c, r)
+                ), { a: tint_layer_alpha }
+              )*/
+              /*
+              rgbaObjToCss(
+                rgbArrToObj(
+                  colors[
+                    closestColor(
+                      rgbObjToArr(
+                        Jimp.intToRGBA(
+                          resized.getPixelColor(c, r)
+                        )
+                      )
+                    )
+                  ].color
+                ), { a: tint_layer_alpha }
+              )
+                  */
+                ''
+            )
+          );
 
         m.redraw();
-
-          console.log(this.bitmap);
 
       })
       .catch(console.error)
@@ -95,29 +121,54 @@ class Main {
     let width = this.bitmap[0].length;
 
     if (width/height < window.innerWidth/window.innerHeight)
-      return `${Math.ceil(window.innerHeight / height)}px`;
+      return `${Math.ceil(window.innerHeight / height * this.scale)}px`;
 
-    return `${Math.round(window.innerWidth / width)}px`
+    return `${Math.round(window.innerWidth / width * this.scale)}px`
   }
 
   view(vnode) {
     return [
 
+      m('div', {class: 'image-grid', style: `grid-template-columns: repeat(${this.bitmap[0].length}, 1fr)`}, this.bitmap.map(
+        (row, r) => row.map((pixel, c) => {
+          return m('div.img-group', {style: {
+            width: this.getImgSize(),
+            height: this.getImgSize(),
+          }}, [
+            m('img', {src: this.bitmap[r][c]}),
+            m('div.tint-layer', {style: {'background-color': this.tintlayer[r][c]}}),
+          ]);
+        })
+      )),
+
       m("div", {
 
         class: `drag-area`,
         ondrop      : this.handleDrop      .bind(this),
-        ondragover  : e => e.preventDefault()
+        ondragover  : e => e.preventDefault(),
+        /*
+        onclick     : e => {
+          this.scale = 1;
+          this.imgIndex = this.imgIndex >= images.length-1 ? 0 : this.imgIndex+1;
+          this.reload(images[this.imgIndex]);
+        },
+        oncontextmenu: e => {
+          e.preventDefault();
+          this.scale = 1;
+          this.imgIndex = this.imgIndex <= 0 ? images.length-1 : this.imgIndex-1;
+          this.reload(images[this.imgIndex]);
+          return false;
+        },*/
+        
+        onwheel: e => {
+          if (e.shiftKey) {
+            let shift = - Math.abs(e.deltaY) / e.deltaY;
+            this.scale += 0.1 * shift;
+            e.preventDefault();
+          }
+        },
 
       }),
-
-      m('div', {class: 'image-grid', style: `grid-template-columns: repeat(${this.bitmap[0].length}, 1fr)`}, this.bitmap.map(
-        (row, r) => row.map((pixel, c) => {
-          return m('img', {style: {
-            width: this.getImgSize()
-          }, src: this.bitmap[r][c]});
-        })
-      )),
 
     ];
   }

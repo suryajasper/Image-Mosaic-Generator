@@ -39,6 +39,7 @@
     "http": "0.0.1-security",
     "jimp": "^0.16.1",
     "mithril": "^2.0.4",
+    "node-fetch": "^2.6.7",
     "path": "^0.12.7",
     "postcss": "^8.2.3",
     "postcss-custom-properties": "^10.0.0",

@@ -5,7 +5,7 @@ const { rgba } = require('jimp');
 const { getAvailableNumberOfCores } = require('terser-webpack-plugin');
 
 const userId = process.argv[2];
-const TOKEN = 'BQBWxgmRjeunQwNEFrrGGTfxteeozwmoWGZ_oqyAwvPq3MsauQ-5b1Azz9DLl5aGhjfzYxYyWfD7xNlinjVn4KuUwmjr5-Qqdc9RwOVnkwFNaSrRCyjFvd83XeCBN4ZibxkDye9_2JUWFyCJrHzq4RIwSHWSrPUw';
+const TOKEN = 'BQAGOw6GAanZv92wTDSXniuXg3X3Ckel0oYBTrnYklG67lZGcSwL1yFWUPVSLKJDe08ZtZlnj35qxWm4kHdORorIiMK3uG5rewayssng4yOjvQgqIjEdxLL-7HBe8m_tP-_a6uF4DvqY2j06AoNPk9P90cQ0R6U_yc3nghgCnB0UVdt5rrmcHhYqRJbrU_7m6yB6ASmlWpj6YoYOCQDZg8O56ew';
 
 function getPlaylist(id, offset) {
   return new Promise((resolve, reject) => {
@@ -59,6 +59,7 @@ function getUserPlaylists() {
               count: playlist.tracks.total,
             };
           });
+          console.log(playlists)
         resolve(playlists);
       })
       .catch(reject)
