@@ -29,7 +29,7 @@ function getPlaylist(id, offset) {
             return obj.track.album;
           return null;
         }).forEach(album => {
-          if (album)
+          if (album) 
             images[album.name] = album.images[2].url;
         });
         resolve(images);

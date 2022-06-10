@@ -1,177 +1,170 @@
 import m from 'mithril';
-import './css/main.scss';
-import WordArt from './wordart';
+import './css/upload.scss';
+import './css/progress-bar.scss';
 import Jimp from 'jimp';
-import { colors, closestColor, hexToRGB, rgbaObjToCss, rgbObjToArr, rgbArrToObj } from './color';
-import { init2D } from './utils';
+import Mosaic from './mosaic';
+import { Icon, icons } from './icons';
+import { splitArray, numToPercent } from './utils';
 
 function importAll(r) {
   console.log(r);
   return r.keys().map(r);
 }
 
-const images = importAll(require.context('./background_imgs/carol_imgs/', false, /\.(png|jpe?g)$/));
-console.log(images);
+const exampleImgs = importAll(require.context('./imgs/examples/', false, /\.(png|jpe?g)$/));
 
 class Main {
-  constructor(vnode) {
-    this.image = null;
-    this.src = '';
-    this.color = '';
-    this.bitmap = [[]];
-    this.tintlayer = [[]];
-    this.scale = 1;
+  constructor() {
+    this.base64s = [];
+    this.currImg = 0;
+
+    this.drop = {
+      failed: false,
+      uploaded: false,
+    };
+
+    this.progress = {
+      curr: 0,
+      max: 1,
+    };
   }
-  
+
+  uploadToServer(images) {
+    
+    const formdata = new FormData();
+    formdata.append('batch_size', images.length);
+    for (let i = 0; i < images.length; i++)
+      formdata.append(`${i}`, images[i]);
+    
+    /* return m.request({
+      method: "POST",
+      url: "http://127.0.0.1:8814/upload_images",
+      data: formdata,
+      serialize: function(formdata) {return formdata}
+    }) */
+
+    return new Promise((res, rej) => {
+      
+      var xhr = new XMLHttpRequest();
+      xhr.open("POST", "http://127.0.0.1:8814/upload_images", true);
+      xhr.onload = function() {
+        if(this.status === 200) {
+          res();
+        } else {
+          rej();
+        }
+      };
+      xhr.send(formdata);
+
+    })
+
+  }
+
+  async uploadImages(images) {
+
+    this.drop.uploaded = true;
+    this.progress.max = images.length;
+    this.progress.curr = 0;
+
+    const BATCH_SIZE = 5;
+
+    console.log('UPLOADED', images);
+
+    let batches = splitArray(images, BATCH_SIZE);
+
+    for (let batch of batches) {
+      const res = await this.uploadToServer(batch);
+      this.progress.curr += batch.length;
+      m.redraw();
+    }
+
+    return 'GOOD';
+
+  }
+
+  handleDragOver(e) {
+    e.preventDefault();
+  }
+
+  handleDragLeave(e) {
+    console.log('leave');
+  }
+
   handleDrop(e) {
     e.preventDefault();
-    
-    var FR = new FileReader();
-    
-    FR.readAsDataURL( e.dataTransfer.files[0] );
-    
-    FR.addEventListener("load", ev => {
-      this.reload(ev.target.result);
-    }); 
-    
-  }
-  
-  oninit(vnode) {
-    this.imgIndex = Math.floor(Math.random()*images.length);
-    this.reload(images[this.imgIndex]);
-  }
-
-  reload(image) {
-    const RESOLUTION = 85;
-
-    let new_height = RESOLUTION;
-    let new_width = RESOLUTION;
-    let tint_layer_alpha = 0.0;
-
-    //window.onresize = m.redraw;
-
-    Jimp.read(image)
-      .then(img => {
-        if (img.bitmap.width > img.bitmap.height)
-          new_width = parseInt(new_height / img.bitmap.height * img.bitmap.width);
-        else
-          new_height = parseInt(new_width / img.bitmap.width * img.bitmap.height);
-        console.log('rescale', new_height * new_width);
-
-        let resized = img.resize(new_width, new_height, Jimp.RESIZE_NEAREST_NEIGHBOR);
-        resized.getBase64(Jimp.MIME_JPEG, (err, res) => {
-          this.src = res; 
-
-          Jimp.read
-          m.redraw();
-        });
-
-        this.bitmap = init2D(resized.bitmap.height, resized.bitmap.width)
-          .map((row, r) => 
-            row.map((_, c) => 
-              colors[
-                closestColor(
-                  rgbObjToArr(
-                    Jimp.intToRGBA(
-                      resized.getPixelColor(c, r)
-                    )
-                  )
-                )
-              ]
-                .img
-            )
-          );
-        
-        this.tintlayer = init2D(resized.bitmap.height, resized.bitmap.width)
-          .map((row, r) => 
-            row.map((_, c) => 
-              /*rgbaObjToCss(
-                Jimp.intToRGBA(
-                  resized.getPixelColor(c, r)
-                ), { a: tint_layer_alpha }
-              )*/
-              /*
-              rgbaObjToCss(
-                rgbArrToObj(
-                  colors[
-                    closestColor(
-                      rgbObjToArr(
-                        Jimp.intToRGBA(
-                          resized.getPixelColor(c, r)
-                        )
-                      )
-                    )
-                  ].color
-                ), { a: tint_layer_alpha }
-              )
-                  */
-                ''
-            )
-          );
-
-        m.redraw();
-
-      })
-      .catch(console.error)
-  }
-
-  getImgSize() {
-
-    let height = this.bitmap.length;
-    let width = this.bitmap[0].length;
-
-    if (width/height < window.innerWidth/window.innerHeight)
-      return `${Math.ceil(window.innerHeight / height * this.scale)}px`;
-
-    return `${Math.round(window.innerWidth / width * this.scale)}px`
+    console.log('dropped');
+    this.uploadImages(e.dataTransfer.files);
   }
 
   view(vnode) {
     return [
-
-      m('div', {class: 'image-grid', style: `grid-template-columns: repeat(${this.bitmap[0].length}, 1fr)`}, this.bitmap.map(
-        (row, r) => row.map((pixel, c) => {
-          return m('div.img-group', {style: {
-            width: this.getImgSize(),
-            height: this.getImgSize(),
-          }}, [
-            m('img', {src: this.bitmap[r][c]}),
-            m('div.tint-layer', {style: {'background-color': this.tintlayer[r][c]}}),
-          ]);
-        })
+      
+      m('div.background-container', exampleImgs.map(base64 => 
+        m('img', {src: base64})  
       )),
 
-      m("div", {
+      m('div.upload-container', [
 
-        class: `drag-area`,
-        ondrop      : this.handleDrop      .bind(this),
-        ondragover  : e => e.preventDefault(),
-        /*
-        onclick     : e => {
-          this.scale = 1;
-          this.imgIndex = this.imgIndex >= images.length-1 ? 0 : this.imgIndex+1;
-          this.reload(images[this.imgIndex]);
-        },
-        oncontextmenu: e => {
-          e.preventDefault();
-          this.scale = 1;
-          this.imgIndex = this.imgIndex <= 0 ? images.length-1 : this.imgIndex-1;
-          this.reload(images[this.imgIndex]);
-          return false;
-        },*/
-        
-        onwheel: e => {
-          if (e.shiftKey) {
-            let shift = - Math.abs(e.deltaY) / e.deltaY;
-            this.scale += 0.1 * shift;
-            e.preventDefault();
-          }
-        },
+        m("div", { 
+          
+          class: `drag-area ${this.drop.uploaded ? 'uploaded' : ''}`,
 
-      }),
+          ondragover  : this.handleDragOver  .bind(this),
+          ondragleave : this.handleDragLeave .bind(this),
+          ondrop      : this.handleDrop      .bind(this),
+
+        }, [
+
+          m('div.upload-start', [
+
+            m('div.icon', icons.upload),
+    
+            m("header", "Get Started for Free!"),
+            m("span", m.trust("Drag & Drop images OR")),
+    
+            m("button", {class: 'drag-drop-button', onclick: e => {
+              document.querySelector('input#csvIn').click();
+            }}, "Browse"),
+    
+            m("input", {
+              type: "file",
+              id: "csvIn", 
+              multiple: true, 
+              hidden:"hidden", 
+              onchange: async e => {
+                await this.uploadImages([...e.target.files]);
+              }
+            })
+
+          ]),
+
+          /*m('progress.upload-progress', {
+
+            value: this.progress.curr, 
+            max: this.progress.max
+
+          })*/
+
+          m('div.progressbar', [
+            m('svg.progressbar__svg', 
+              m('circle.progressbar__svg-circle.circle-html.shadow-html', {
+
+                style: `stroke-dashoffset: ${440 - (440 * 100 * this.progress.curr / this.progress.max) / 100}`,
+                cx: 80, cy: 80, r: 70,
+
+              })
+            ),
+            m('span.progressbar__text.shadow-html', 
+              numToPercent(this.progress.curr / this.progress.max)
+            )
+          ])
+
+        ])
+
+      ])
 
     ];
   }
 }
 
-m.mount(document.body, Main);
+m.mount(document.body, Mosaic);

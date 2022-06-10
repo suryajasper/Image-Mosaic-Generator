@@ -35,4 +35,48 @@ function init2D(rows, cols, val=0) {
   return arr;
 }
 
-module.exports = { msToTime, arr2D, init2D };
+function splitArray(arr, size) {
+  let newArr = [];
+
+  while (arr.length > 0)
+    newArr.push(arr.splice(0, size));
+  
+  return newArr;
+}
+
+function numToPercent(num) {
+  return `${Math.round(num*100*100)/100}%`;
+}
+
+function randArr(array, weighted=true) {
+
+  if (Array.isArray(array)) {
+
+    let ind = 0;
+
+    if (weighted) {
+      let weights = array.map(el => 1 / el.d);
+      let sum = weights.reduce((a, b) => a + b);
+      weights = weights.map(w => w / sum);
+      
+      let r = Math.random();
+      
+      for (let i = 1; i < weights.length; i++) {
+        weights[i] = weights[i] + weights[i-1];
+        if (r >= weights[i-1] && r < weights[i]) {
+          ind = i;
+          break;
+        }
+      }
+    }
+    else
+      ind = Math.floor(Math.random() * array.length);
+
+    return array[ind];
+  }
+  else 
+    return array;
+
+}
+
+module.exports = { msToTime, arr2D, init2D, splitArray, numToPercent, randArr };

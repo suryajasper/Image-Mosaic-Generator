@@ -1,32 +1,45 @@
 
-import colors from '../spotify_accounts/out_algebrainer.json';
-// import colors from '../spotify_accounts/out_caroltuu.json';
+// import colors from '../spotify_accounts/out_algebrainer.json';
+// import colors from './data/avg.json';
 
-if (Array.isArray(colors[0]))
-  colors = colors.map((color, i) => {
+let colors = [];
+
+async function loadColors() {
+
+  let res = await fetch(`http://127.0.0.1:8814/get_images?id=test`);
+
+  let body = await res.json();
+
+  colors = body.colors.map((color, i) => {
     return {
       color,
-      img: `./src/out-thatha/${i}.jpg`,
+      img: `data:image/jpg;base64,${body.imgs[i]}`,
+      id: i,
     };
   });
+}
 
-function closestColor(color) {
-  let minD = 1e99;
-  let minI = 0;
+function closestColors(color, n=3) {
+  
+  let mins = [];
+
+  for (let i = 0; i < n; i++) mins.push({i: 0, d: 1e99});
 
   for (let i = 0; i < colors.length; i++) {
     let [r1, g1, b1, _] = colors[i].color;
     let [r2, g2, b2] = color;
     
-    // const d = ((r2-r1)*0.30)**2 + ((g2-g1)*0.59)**2 + ((b2-b1)*0.11)**2;
     const d = ((r2-r1)*0.30)**2 + ((g2-g1)*0.59)**2 + ((b2-b1)*0.11)**2;
-    if (d < minD) {
-      minD = d;
-      minI = i;
+
+    for (let j = 0; j < n; j++) {
+      if (d < mins[j].d) {
+        mins[j] = {i, d};
+        break;
+      }
     }
   }
 
-  return minI;
+  return mins;
 }
 
 function hexToRGB(color) {
@@ -52,4 +65,4 @@ function rgbArrToObj(arr) {
   return {r, g, b, a};
 }
 
-export { colors, closestColor, hexToRGB, rgbaObjToCss, rgbObjToArr, rgbArrToObj }
+export { colors, loadColors, closestColors, hexToRGB, rgbaObjToCss, rgbObjToArr, rgbArrToObj }
