@@ -1,4 +1,5 @@
 
+import getUid from './auth';
 // import colors from '../spotify_accounts/out_algebrainer.json';
 // import colors from './data/avg.json';
 
@@ -6,7 +7,9 @@ let colors = [];
 
 async function loadColors() {
 
-  let res = await fetch(`http://127.0.0.1:8814/get_images?id=test`);
+  let uid = await getUid();
+
+  let res = await fetch(`http://127.0.0.1:8814/get_images?id=${uid}`);
 
   let body = await res.json();
 
@@ -17,6 +20,7 @@ async function loadColors() {
       id: i,
     };
   });
+
 }
 
 function closestColors(color, n=3) {
