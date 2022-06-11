@@ -10,7 +10,7 @@ function importAll(r) {
   return r.keys().map(r);
 }
 
-const images = importAll(require.context('./background_imgs/dad_imgs/', false, /\.(png|jpe?g)$/));
+const images = importAll(require.context('./background_imgs/carol_imgs/', false, /\.(png|jpe?g)$/));
 console.log(images);
 
 export default class Mosaic {
@@ -20,7 +20,11 @@ export default class Mosaic {
     this.color = '';
     this.bitmap = [[]];
     this.tintlayer = [[]];
+
     this.scale = 1;
+    this.resolution = 85;
+    this.balance = 3;
+    this.tintLayerAlpha = 0.4;
   }
   
   handleDrop(e) {
@@ -44,11 +48,8 @@ export default class Mosaic {
   }
 
   reload(image) {
-    const RESOLUTION = 85;
-
-    let new_height = RESOLUTION;
-    let new_width = RESOLUTION;
-    let tint_layer_alpha = 0.4;
+    let new_height = this.resolution;
+    let new_width = this.resolution;
 
     //window.onresize = m.redraw;
 
@@ -78,7 +79,7 @@ export default class Mosaic {
                       Jimp.intToRGBA(
                         resized.getPixelColor(c, r)
                       )
-                    )
+                    ), this.balance,
                   )
                 ).i
               ]
@@ -88,15 +89,11 @@ export default class Mosaic {
         this.tintlayer = init2D(resized.bitmap.height, resized.bitmap.width)
           .map((row, r) => 
             row.map((_, c) => 
-              rgbaObjToCss(
-                Jimp.intToRGBA(
-                  resized.getPixelColor(c, r)
-                ), { a: tint_layer_alpha }
-              )                
+              Jimp.intToRGBA(
+                resized.getPixelColor(c, r)
+              )
             )
           );
-
-        console.log([... new Set(this.bitmap.map(row => row.map(c => c.id)).reduce((a, b) => a.concat(b)))].sort())
 
         m.redraw();
 
@@ -118,6 +115,23 @@ export default class Mosaic {
   view(vnode) {
     return [
 
+      m('div.params', [
+        m('p', 'Resolution'),
+        m('input', {type: 'range', min: 30, max: 120, value: this.resolution, oninput: e => {
+          this.resolution = parseInt(e.target.value);
+          this.reload(images[this.imgIndex]);
+        }}),
+        m('p', 'Noise'),
+        m('input', {type: 'range', min: 1, max: 10, step: 1, value: this.balance, oninput: e => {
+          this.balance = parseInt(e.target.value);
+          this.reload(images[this.imgIndex]);
+        }}),
+        m('p', 'Tint'),
+        m('input', {type: 'range', min: 0, max: 1, step: 0.05, value: this.tintLayerAlpha, oninput: e => {
+          this.tintLayerAlpha = parseFloat(e.target.value);
+        }}),
+      ]),
+
       m('div', {class: 'image-grid', style: `grid-template-columns: repeat(${this.bitmap[0].length}, 1fr)`}, this.bitmap.map(
         (row, r) => row.map((pixel, c) => {
           return m('div.img-group', {style: {
@@ -125,17 +139,23 @@ export default class Mosaic {
             height: this.getImgSize(),
           }}, [
             m('img', {src: this.bitmap[r][c].img}),
-            m('div.tint-layer', {style: {'background-color': this.tintlayer[r][c]}}, /*this.bitmap[r][c].id*/),
+            m('div.tint-layer', {
+              style: {
+                'background-color': rgbaObjToCss( this.tintlayer[r][c], { a: this.tintLayerAlpha } ),
+              }
+            }, /*this.bitmap[r][c].id*/),
           ]);
         })
       )),
 
+      /*
       m("div", {
 
         class: `drag-area`,
         ondrop      : this.handleDrop      .bind(this),
         ondragover  : e => e.preventDefault(),
-        /*
+
+        
         onclick     : e => {
           this.scale = 1;
           this.imgIndex = this.imgIndex >= images.length-1 ? 0 : this.imgIndex+1;
@@ -147,17 +167,18 @@ export default class Mosaic {
           this.imgIndex = this.imgIndex <= 0 ? images.length-1 : this.imgIndex-1;
           this.reload(images[this.imgIndex]);
           return false;
-        },*/
+        },
         
-        /*onwheel: e => {
+        onwheel: e => {
           if (e.shiftKey) {
             let shift = - Math.abs(e.deltaY) / e.deltaY;
             this.scale += 0.1 * shift;
             e.preventDefault();
           }
-        },*/
+        },
 
       }),
+      */
 
     ];
   }
