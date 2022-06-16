@@ -1,22 +1,82 @@
+
+body {
+  background-color: #c2b7d7;
+}
+
+.tool-group {
+  z-index: 9999;
+  position: fixed;
+}
+
+.img-grid {
+  
+  margin-top: 20px;
+  margin-left: 80px;
+
+  > img {
+    margin: 3px;
+    border-radius: 5px;
+    border: none;
+    transition: 0.5s;
+    cursor: pointer;
+
+    &:hover {
+      transform: scale(1.1);
+      transition: 0.3s;
+    }
+  }
+  
+  &.selectmode {
+    > img {
+      opacity: 0.4;
+      transform: scale(0.75);
+      transition: 0.5s;
+
+      &:hover {
+        transform: scale(0.85);
+        transition: 0.3s;
+      }
+    }
+    
+    > img.selected {
+      opacity: 1;
+      transform: scale(1);
+      transition: 0.5s;
+    }
+  }
+
+}
+
+.header {
+
+  text-align: center;
+
+}
+
 canvas {
   display: block;
 }
 
-body {
+.params {
   display: flex;
   flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  position: relative;
+
+  .range-container {
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+    
+    * {
+      margin: 10px;
+    }
+  }
 }
 
-.image-grid {
+.mosaic-grid {
   display: grid;
   grid-gap: 0;
-  width: fit-content;
-
+  
   .img-group {
-
     position: relative;
 
     > * {
@@ -36,6 +96,45 @@ body {
       text-align: center;
       padding: 0;
     }
+
+    &.grayed {
+      img {
+        opacity: 0.25;
+      }
+
+      .tint-layer {
+        background-color: #ffffff00 !important;
+      }
+    }
+  }
+
+}
+
+.mosaic-page {
+
+  display: flex;
+  flex-direction: row;
+  
+  > .mosaic-grid {
+    flex-shrink: 0;
+  }
+  
+  > .mosaic-sidebar {
+    
+    position: relative;
+    max-height: 100vh;
+
+    .img-grid {
+      margin: 0 !important;
+      max-height: calc(100vh - 140px);
+      overflow-y: scroll;
+
+      img.hidden {
+        opacity: 0.25;
+        transform: scale(0.75);
+      }
+    }
+
   }
 
 }

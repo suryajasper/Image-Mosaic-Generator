@@ -104,6 +104,7 @@ export default class ImageUpload {
   
           m("input", {
             type: "file",
+            accept: 'image/png, image/jpeg',
             id: "csvIn", 
             multiple: true, 
             hidden:"hidden", 

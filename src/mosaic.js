@@ -3,57 +3,100 @@ import './css/mosaic.scss';
 import WordArt from './wordart';
 import Jimp from 'jimp';
 import { colors, loadColors, closestColors, hexToRGB, rgbaObjToCss, rgbObjToArr, rgbArrToObj } from './color';
-import { init2D, randArr } from './utils';
+import { init2D, randArr, downloadURI, base64ToArrayBuffer } from './utils';
+import getUid from './auth';
 
-function importAll(r) {
-  console.log(r);
-  return r.keys().map(r);
+function RangeGroup(vnode) {
+  
+  const {title, initialVal, min, max, step} = vnode.attrs;
+  let newVal = initialVal;
+
+  return {
+    view(vnode) {
+      return m('div.range-container', [
+        m('p.range-title', title),
+        m('input', {
+          type: 'range',
+          min, max, step, 
+          value: newVal, 
+
+          oninput: e => {
+            newVal = e.target.value;
+            vnode.attrs.update(newVal);
+          }
+        }),
+        m('p.range-value', newVal)
+      ]);
+    }
+  };
+
 }
-
-const images = importAll(require.context('./background_imgs/carol_imgs/', false, /\.(png|jpe?g)$/));
-console.log(images);
 
 export default class Mosaic {
   constructor(vnode) {
     this.image = null;
+    this.selectedImg = null;
     this.src = '';
     this.color = '';
     this.bitmap = [[]];
     this.tintlayer = [[]];
+    this.uniques = [];
 
-    this.scale = 1;
     this.resolution = 85;
     this.balance = 3;
-    this.tintLayerAlpha = 0.4;
-  }
-  
-  handleDrop(e) {
-    e.preventDefault();
-    
-    var FR = new FileReader();
-    
-    FR.readAsDataURL( e.dataTransfer.files[0] );
-    
-    FR.addEventListener("load", ev => {
-      this.reload(ev.target.result);
-    }); 
-    
+    this.tintLayerAlpha = 0.2;
   }
   
   oninit(vnode) {
-    this.imgIndex = Math.floor(Math.random()*images.length);
+    // this.imgIndex = Math.floor(Math.random()*images.length);
+    this.image = vnode.attrs.img || window.localStorage.getItem('img');
     loadColors().then(() => {
-      this.reload(images[this.imgIndex]);
+      m.redraw();
+      this.reload();
     })
+    window.onresize = e => {
+      this.getGridSize();
+      m.redraw();
+    } 
   }
 
-  reload(image) {
+  async export() {
+
+    const uid = await getUid();
+    const idMap = this.bitmap.map(row => row.map(el => el.id)); 
+    const tintFactor = this.tintLayerAlpha;
+    const tintMap = this.tintlayer.map(row => row.map(rgbObjToArr));
+
+    const data = { uid, idMap, tintFactor, tintMap };
+    
+    const res = await m.request({
+      url: 'http://127.0.0.1:8814/generate_mosaic',
+      method: 'POST',
+      body: data,
+    });
+
+    const arrayBuffer = base64ToArrayBuffer(res.img);
+
+    const blob = new Blob([arrayBuffer], {type: 'image/jpg'});
+    const blobUrl = URL.createObjectURL(blob);
+    
+    const a = document.createElement('a');
+    a.setAttribute('download', 'mosaic.jpg');
+    a.href = blobUrl;
+    document.body.appendChild(a);
+    a.click();
+    // a.remove();
+
+  }
+
+  reload() {
+
+    console.log(this);
+
     let new_height = this.resolution;
     let new_width = this.resolution;
 
-    //window.onresize = m.redraw;
-
-    Jimp.read(image)
+    Jimp.read(this.image)
       .then(img => {
         if (img.bitmap.width > img.bitmap.height)
           new_width = parseInt(new_height / img.bitmap.height * img.bitmap.width);
@@ -80,11 +123,16 @@ export default class Mosaic {
                         resized.getPixelColor(c, r)
                       )
                     ), this.balance,
-                  )
+                  ), false,
                 ).i
               ]
             )
           );
+
+        this.uniques = [... new Set(this.bitmap
+          .reduce((a, b) => a.concat(b))
+          .map(pix => pix.id)
+        )];
         
         this.tintlayer = init2D(resized.bitmap.height, resized.bitmap.width)
           .map((row, r) => 
@@ -101,85 +149,85 @@ export default class Mosaic {
       .catch(console.error)
   }
 
-  getImgSize() {
+  getGridSize() {
+
+    console.log('getGridSize')
 
     let height = this.bitmap.length;
     let width = this.bitmap[0].length;
 
     if (width/height < window.innerWidth/window.innerHeight)
-      return `${Math.ceil(window.innerHeight / height * this.scale)}px`;
+      return {
+        width: `${this.bitmap[0].length/this.bitmap.length*100}vh`,
+        height: `100vh`,
+      }
 
-    return `${Math.round(window.innerWidth / width * this.scale)}px`
+    return {
+      width: `100vw`,
+      height: `${this.bitmap.length/this.bitmap[0].length*100}vw`,
+    }
+  }
+
+  updateParam(param, value, reload) {
+    this[param] = parseFloat(value);
+    if (reload) this.reload();
   }
 
   view(vnode) {
-    return [
 
-      m('div.params', [
-        m('p', 'Resolution'),
-        m('input', {type: 'range', min: 30, max: 120, value: this.resolution, oninput: e => {
-          this.resolution = parseInt(e.target.value);
-          this.reload(images[this.imgIndex]);
-        }}),
-        m('p', 'Noise'),
-        m('input', {type: 'range', min: 1, max: 10, step: 1, value: this.balance, oninput: e => {
-          this.balance = parseInt(e.target.value);
-          this.reload(images[this.imgIndex]);
-        }}),
-        m('p', 'Tint'),
-        m('input', {type: 'range', min: 0, max: 1, step: 0.05, value: this.tintLayerAlpha, oninput: e => {
-          this.tintLayerAlpha = parseFloat(e.target.value);
-        }}),
-      ]),
+    return m('div.mosaic-page', [
 
-      m('div', {class: 'image-grid', style: `grid-template-columns: repeat(${this.bitmap[0].length}, 1fr)`}, this.bitmap.map(
-        (row, r) => row.map((pixel, c) => {
-          return m('div.img-group', {style: {
-            width: this.getImgSize(),
-            height: this.getImgSize(),
-          }}, [
-            m('img', {src: this.bitmap[r][c].img}),
-            m('div.tint-layer', {
-              style: {
-                'background-color': rgbaObjToCss( this.tintlayer[r][c], { a: this.tintLayerAlpha } ),
-              }
-            }, /*this.bitmap[r][c].id*/),
-          ]);
-        })
-      )),
+      m('div', {
+        class: 'mosaic-grid', 
+        style: Object.assign({
+          'grid-template-columns': `repeat(${this.bitmap[0].length}, 1fr)`,
+        }, this.getGridSize())
+      }, 
+        this.bitmap.map(
+          (row, r) => row.map((pixel, c) => {
 
-      /*
-      m("div", {
+            return m('div', {
+              class: `img-group ${(this.selectedImg !== null && pixel.id !== this.selectedImg) ? 'grayed' : ''}`
+            }, [
+              m('img', {src: pixel.img}),
+              m('div.tint-layer', {
+                style: { 'background-color': rgbaObjToCss( this.tintlayer[r][c], { a: this.tintLayerAlpha } ), }
+              }),
+            ]);
 
-        class: `drag-area`,
-        ondrop      : this.handleDrop      .bind(this),
-        ondragover  : e => e.preventDefault(),
+          })
+        )
+      ),
 
+      m('div.mosaic-sidebar', [
+
+        m('div.params', 
+          [
+            {title: 'Resolution', min: 30, max: 120, step: 1, initialVal: this.resolution, update: val => this.updateParam('resolution', val, true)},
+            {title: 'Noise', min: 1, max: 10, step: 1, initialVal: this.balance, update: val => this.updateParam('balance', val, true)},
+            {title: 'Tint', min: 0, max: 1, step: 0.05, initialVal: this.tintLayerAlpha, update: val => this.updateParam('tintLayerAlpha', val, false)},
+          ]
+          .map(el => m(RangeGroup, el))
+          .concat([ m('button', { onclick: e => { this.export() } }, 'Export') ])
+        ),
         
-        onclick     : e => {
-          this.scale = 1;
-          this.imgIndex = this.imgIndex >= images.length-1 ? 0 : this.imgIndex+1;
-          this.reload(images[this.imgIndex]);
-        },
-        oncontextmenu: e => {
-          e.preventDefault();
-          this.scale = 1;
-          this.imgIndex = this.imgIndex <= 0 ? images.length-1 : this.imgIndex-1;
-          this.reload(images[this.imgIndex]);
-          return false;
-        },
-        
-        onwheel: e => {
-          if (e.shiftKey) {
-            let shift = - Math.abs(e.deltaY) / e.deltaY;
-            this.scale += 0.1 * shift;
-            e.preventDefault();
+        m('div.img-grid', {
+          onmouseleave: e => {
+            this.selectedImg = null;
           }
         },
+          colors.map((el, id) => m('img', {
+            class: `${this.uniques.includes(id) ? '' : 'hidden'}`,
+            src: el.img,
+            onmouseover: e => {
+              this.selectedImg = id;
+            },
+          }))
+        ),
 
-      }),
-      */
+      ]),
 
-    ];
+    ]);
+
   }
 }

@@ -1,9 +1,14 @@
-from flask import Flask, request
+from flask import Flask, request, send_file, send_from_directory
 
 from os import path, listdir, remove
 from shutil import rmtree
 import json
 import base64
+
+import cv2
+from PIL import Image
+from transforms import RGBTransform
+import numpy as np
 
 from img_process import add_photos
 
@@ -92,10 +97,61 @@ def send_images():
 def remove_images():
   body = request.get_json(force=True)
   id = body['id']
+  to_remove = body['selected']
 
   rmtree(path.join('out', id))
 
   return 'DONE'
+
+@app.route('/generate_mosaic', methods=['POST'])
+def generate_mosaic():
+  body = request.get_json(force=True)
+  
+  id = body['uid']
+  id_map = body['idMap']
+  tint_map = body['tintMap']
+  tint_factor = body['tintFactor']
+
+  bitmap = []
+
+  for r in range(len(id_map)):
+    row = []
+
+    for c in range(len(id_map[r])):
+      img_id = id_map[r][c]
+
+      img = Image.open(path.join('out', id, 'imgs', f'{img_id}.jpg'))
+      img = img.convert('RGB')
+
+      tint_transform = RGBTransform().mix_with(tint_map[r][c], factor=tint_factor)
+      tinted = tint_transform.applied_to(img)
+
+      np_img = np.array(tinted)
+      cv2_img = cv2.cvtColor(np_img, cv2.COLOR_RGB2BGR) 
+
+      row.append(cv2_img)
+    
+    bitmap.append(row)
+
+  rows = [ np.concatenate(row, axis=1) for row in bitmap ]
+  img = np.concatenate(rows, axis=0)
+
+  # cv2.imshow('img', img)
+
+  out_path = path.join('out', id, 'final.jpg')
+
+  cv2.imwrite(out_path, img)
+
+  img_base64 = to_base64(out_path)
+  
+  return { "img": img_base64 }
+
+@app.route('/get_mosaic')
+def send_mosaic():
+  id = request.args.get('uid')
+
+  return send_file(path.join('out', id, 'final.jpg'))
+
 
 if __name__ == "__main__":
   app.run(port=8814)

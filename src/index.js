@@ -32,7 +32,8 @@ export default class Main {
       })
         .then(count => {
           if (count > 0)
-            m.mount(document.body, Mosaic);
+            m.mount(document.body, ImageBuckets);
+            // m.mount(document.body, Mosaic);
         })
 
     });

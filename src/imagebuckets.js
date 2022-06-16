@@ -4,7 +4,7 @@ import getUid from './auth';
 import ImageUpload from './imageupload';
 import IconButton from './icon-button';
 
-import './css/imagebuckets.scss';
+import './css/mosaic.scss';
 import Mosaic from './mosaic';
 import Cookies from './cookies';
 import Main from '.';
@@ -59,6 +59,28 @@ export default class ImageBuckets {
         success: this.reloadImages.bind(this),
       }),
 
+      m('input', { 
+        id: "mosaicBaseIn", 
+        type: "file", 
+        accept: "image/jpeg",
+        style: { visibility: 'hidden' },  
+        onchange: e => {
+
+          const fr = new FileReader();
+          fr.readAsDataURL(e.target.files[0]);
+          fr.addEventListener('load', fe => {
+
+            const img = fe.target.result;
+
+            m.mount(document.body, () => { return { 
+              view: vnode => m(Mosaic, { img })
+            } });
+
+          })
+          
+        }
+      }),
+
       m('div.header', { style: { display: this.selection.active ? 'block' : 'none' }, }, [
         m('p', `${this.selection.selected.filter(el => el).length} Images Selected`),
       ]),
@@ -67,6 +89,7 @@ export default class ImageBuckets {
         m(IconButton, {
           icon: 'gear', 
           title: 'Clear Selection', 
+          hidden: !this.selection.active,
           onclick: () => {
             this.resetSelection();
           }
@@ -74,15 +97,21 @@ export default class ImageBuckets {
         m(IconButton, {
           icon: 'trash', 
           title: 'Remove Images', 
+          hidden: !this.selection.active,
           onclick: async () => {
             
             let uid = await getUid();
+
+            let selectedImgs = this.selection.selected
+              .map((selected, i) => selected ? i : -1)
+              .filter(i => i >= 0);
 
             await m.request({
               method: 'POST',
               url: `http://127.0.0.1:8814/remove_imgs`,
               body: {
                 id: uid,
+                selected: selectedImgs,
               }
             });
 
@@ -94,6 +123,7 @@ export default class ImageBuckets {
         m(IconButton, {
           icon: 'upload',
           title: 'Upload More Images', 
+          hidden: this.selection.active,
           onclick: () => {
             document.querySelector('#csvIn').click();
           }
@@ -102,18 +132,13 @@ export default class ImageBuckets {
           icon: 'build',
           title: 'Generate Mosaic', 
           onclick: () => {
-            m.mount(document.body, Mosaic);
-          }
-        }),
-        m(IconButton, {
-          icon: 'exit',
-          title: 'Log Out', 
-          onclick: () => {
-            Cookies.erase('uid');
-            m.mount(document.body, Main);
+            document.querySelector('#mosaicBaseIn').click();
+            // m.mount(document.body, Mosaic);
           }
         }),
       ]),
+
+      // m(Mosaic),
 
       m('div', { class: `img-grid ${this.selection.active ? 'selectmode' : ''}` },
 
