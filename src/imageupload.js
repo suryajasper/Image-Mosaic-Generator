@@ -32,7 +32,7 @@ export default class ImageUpload {
     return new Promise((res, rej) => {
       
       var xhr = new XMLHttpRequest();
-      xhr.open("POST", "http://127.0.0.1:8814/upload_images", true);
+      xhr.open("POST", "http://suryajasper.com:8814/upload_images", true);
       xhr.onload = function() {
         if (this.status === 200) res();
         else rej();

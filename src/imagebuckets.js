@@ -35,7 +35,7 @@ export default class ImageBuckets {
       
       m.request({
         method: 'GET',
-        url: `http://127.0.0.1:8814/get_images?id=${uid}`
+        url: `http://suryajasper.com:8814/get_images?id=${uid}`
       })
         .then(res => {
           this.images = res.imgs.map(img => `data:image/jpg;base64,${img}`);
@@ -73,7 +73,7 @@ export default class ImageBuckets {
             formdata.append('uid', uid);
   
             let xhr = new XMLHttpRequest();
-            xhr.open("POST", "http://127.0.0.1:8814/upload_mosaic_img", true);
+            xhr.open("POST", "http://suryajasper.com:8814/upload_mosaic_img", true);
             xhr.onload = () => {
 
               const fr = new FileReader();
@@ -121,7 +121,7 @@ export default class ImageBuckets {
 
             await m.request({
               method: 'POST',
-              url: `http://127.0.0.1:8814/remove_imgs`,
+              url: `http://suryajasper.com:8814/remove_imgs`,
               body: {
                 id: uid,
                 selected: selectedImgs,

@@ -9,7 +9,7 @@ async function loadColors() {
 
   let uid = await getUid();
 
-  let res = await fetch(`http://127.0.0.1:8814/get_images?id=${uid}`);
+  let res = await fetch(`http://suryajasper.com:8814/get_images?id=${uid}`);
 
   let body = await res.json();
 

@@ -91,7 +91,7 @@ export default class Mosaic {
     const data = { uid, idMap, tintFactor, tintMap };
     
     const res = await m.request({
-      url: 'http://127.0.0.1:8814/generate_mosaic',
+      url: 'http://suryajasper.com:8814/generate_mosaic',
       method: 'POST',
       body: data,
     });
