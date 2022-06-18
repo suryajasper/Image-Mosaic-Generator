@@ -179,6 +179,6 @@ def send_mosaic():
   return send_file(path.join('out', id, 'final.jpg'))
 
 if __name__ == "__main__":
-  app.run(port=8814)
+  app.run('0.0.0.0', port=8814)
 
 CORS(app, resources={r"*": {"origins": "*"}})
