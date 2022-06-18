@@ -24,18 +24,20 @@ const HtmlWebpackPlugin = require('html-webpack-plugin');
  */
 
 const TerserPlugin = require('terser-webpack-plugin');
+const MiniCssExtractPlugin = require('mini-css-extract-plugin');
 
 module.exports = {
   mode: 'development',
   plugins: [
     new webpack.ProgressPlugin(),
     new HtmlWebpackPlugin({
-      title: 'Spotify Demo',
+      title: 'Image Mosaic Generator',
       meta: {
         viewport: 'width=device-width, initial-scale=1, shrink-to-fit=no, viewport-fit=cover',
-        'application-name': 'Spotify Demo',
-        description: 'Spotify example for mithril demo',
+        'application-name': 'Image Mosaic Generator',
+        description: 'Generate a replica of any image constructed from a library of other images',
       },
+      filename: 'templates/index.html',
     }),
     new webpack.DefinePlugin({
       'process.env.ENVIRONMENT': "'BROWSER'"
@@ -66,32 +68,56 @@ module.exports = {
   },
 
   module: {
-    rules: [{
-      test: /\.(js|jsx)$/,
-      include: [path.resolve(__dirname, 'src')],
-      loader: 'babel-loader',
-      options: {
-        presets: ['@babel/preset-env']
-      }
-    }, {
-      test: /.css$/,
-      use: [
-        'style-loader',
-        {
-          loader: 'css-loader',
-          options: {
-            modules: {
-              localIdentName: '[local]',
-            },
-            sourceMap: true,
+    rules: [
+      {
+        test: /\.(js|jsx)$/,
+        include: [path.resolve(__dirname, 'src')],
+        use: [
+          {
+            loader: 'babel-loader',   
+            options: {
+              presets: ['@babel/preset-env']
+            }         
           },
-        },
-        'sass-loader',
-      ],
-    }, {
-     test: /\.(png|jpg|gif)/,
-     type: 'asset/resource'
-   }],
+        ],
+      }, 
+      {
+        test: /.css$/,
+        use: [
+          'style-loader',
+          {
+            loader: 'css-loader',
+            options: {
+              modules: {
+                localIdentName: '[local]',
+              },
+              sourceMap: true,
+            },
+          },
+          'sass-loader',
+        ],
+      }, 
+      {
+        test: /\.(png|jpg|gif)/,
+        exclude: /node_modules/,
+        use: [
+          {
+            loader: require.resolve('file-loader'),
+            options: {
+              name: 'static/images/[contenthash].[ext]',
+              esModule: false,
+            }
+          },
+        ]
+      }
+    ],
+  },
+
+  output: {
+    filename: 'static/js/build.[contenthash].js',
+    path: path.join(__dirname, '/dist'),
+    chunkFilename: 'static/js/[name].[contenthash].js',
+    publicPath: '../',
   },
 
   optimization: {
