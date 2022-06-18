@@ -1,7 +1,7 @@
 from flask import Flask, request, send_file
 from flask_cors import CORS, cross_origin
 
-from os import path, listdir, remove
+from os import path, listdir, remove, rename
 from shutil import rmtree
 import json
 import base64
@@ -24,6 +24,12 @@ def read_json(file_name):
   with open(file_name , "r") as json_file:
     data = json.load(json_file)
   return data
+
+def files_in_dir(dir_name, include_path=True):
+  files = [ f for f in listdir(dir_name) if path.isfile(path.join(dir_name, f)) ]
+  if include_path:
+    files = [ path.join(dir_name, f) for f in files ]
+  return files
 
 app = Flask(__name__)
 
@@ -123,7 +129,33 @@ def remove_images():
   id = body['id']
   to_remove = body['selected']
 
-  rmtree(path.join('out', id))
+  img_path = path.join('out', id, 'imgs')
+  
+  img_files = files_in_dir(img_path, include_path=False)
+  img_files = sorted(img_files, key = lambda f : int(f.split('.')[0]))
+  img_files = [path.join(img_path, f) for f in img_files]
+
+  if len(to_remove) == len(img_files):
+    rmtree(path.join('out', id))
+  
+  else:
+
+    for f in files_in_dir(path.join('out', id, 'data')):
+
+      data = read_json(f)
+      data = [ el for i, el in enumerate(data) if i not in to_remove ]
+
+      with open(f, 'w') as out:
+        json.dump(data, out)
+    
+    ind = 0
+
+    for i, img in enumerate(img_files):
+      if i in to_remove:
+        remove(img)
+      else:
+        rename(img, path.join(img_path, f'{ind}.jpg'))
+        ind += 1
 
   return 'DONE'
 
