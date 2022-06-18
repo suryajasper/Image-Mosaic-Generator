@@ -5,6 +5,7 @@ import Jimp from 'jimp';
 import { colors, loadColors, closestColors, hexToRGB, rgbaObjToCss, rgbObjToArr, rgbArrToObj } from './color';
 import { init2D, randArr, downloadURI, base64ToArrayBuffer } from './utils';
 import getUid from './auth';
+import Main from '.';
 
 function RangeGroup(vnode) {
   
@@ -42,22 +43,42 @@ export default class Mosaic {
     this.tintlayer = [[]];
     this.uniques = [];
 
+    this.admin = false;
+
     this.resolution = 85;
     this.balance = 3;
     this.tintLayerAlpha = 0.2;
   }
   
   oninit(vnode) {
-    // this.imgIndex = Math.floor(Math.random()*images.length);
-    this.image = vnode.attrs.img || window.localStorage.getItem('img');
-    loadColors().then(() => {
-      m.redraw();
-      this.reload();
+
+    const {id} = vnode.attrs;
+
+    getUid().then(uid => {
+      this.admin = uid === id;
     })
+
+    m.request(`http://localhost:8814/get_mosaic_img?uid=${id}`, {
+      method: 'GET',
+    }).then(({img}) => {
+
+      img = `data:image/jpg;base64,${img}`;
+
+      this.image = img || window.localStorage.getItem('img');
+
+      loadColors().then(() => {
+        m.redraw();
+        this.reload();
+      })
+
+    })
+
+
     window.onresize = e => {
       this.getGridSize();
       m.redraw();
     } 
+
   }
 
   async export() {
@@ -91,8 +112,6 @@ export default class Mosaic {
 
   reload() {
 
-    console.log(this);
-
     let new_height = this.resolution;
     let new_width = this.resolution;
 
@@ -102,7 +121,6 @@ export default class Mosaic {
           new_width = parseInt(new_height / img.bitmap.height * img.bitmap.width);
         else
           new_height = parseInt(new_width / img.bitmap.width * img.bitmap.height);
-        console.log('rescale', new_height * new_width);
 
         let resized = img.resize(new_width, new_height, Jimp.RESIZE_NEAREST_NEIGHBOR);
         resized.getBase64(Jimp.MIME_JPEG, (err, res) => {
@@ -150,8 +168,6 @@ export default class Mosaic {
   }
 
   getGridSize() {
-
-    console.log('getGridSize')
 
     let height = this.bitmap.length;
     let width = this.bitmap[0].length;
@@ -201,15 +217,20 @@ export default class Mosaic {
 
       m('div.mosaic-sidebar', [
 
-        m('div.params', 
+        this.admin ? (m('div.params', 
           [
             {title: 'Resolution', min: 30, max: 120, step: 1, initialVal: this.resolution, update: val => this.updateParam('resolution', val, true)},
             {title: 'Noise', min: 1, max: 10, step: 1, initialVal: this.balance, update: val => this.updateParam('balance', val, true)},
             {title: 'Tint', min: 0, max: 1, step: 0.05, initialVal: this.tintLayerAlpha, update: val => this.updateParam('tintLayerAlpha', val, false)},
           ]
           .map(el => m(RangeGroup, el))
-          .concat([ m('button', { onclick: e => { this.export() } }, 'Export') ])
-        ),
+          .concat([
+            m('div.button-group', [
+              m('button', { onclick: e => { m.route(document.body, '/', { '/': Main }); } }, 'Back'),
+              m('button', { onclick: e => { this.export() } }, 'Export'),
+            ]),
+          ])
+        )) : '',
         
         m('div.img-grid', {
           onmouseleave: e => {

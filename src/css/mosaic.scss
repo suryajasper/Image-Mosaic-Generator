@@ -123,15 +123,28 @@ canvas {
     
     position: relative;
     max-height: 100vh;
+    padding: 10px;
+
+    .button-group {
+      display: flex;
+      flex-direction: row;      
+
+      > * {
+        flex: 1;
+        margin: 0px 5px;
+      }
+    }
 
     .img-grid {
       margin: 0 !important;
-      max-height: calc(100vh - 140px);
+      margin-top: 10px !important;
+      max-height: calc(100vh - 180px);
       overflow-y: scroll;
 
       img.hidden {
         opacity: 0.25;
         transform: scale(0.75);
+        transition: 0.3s;
       }
     }
 

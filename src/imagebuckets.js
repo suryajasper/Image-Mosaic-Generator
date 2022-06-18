@@ -66,15 +66,28 @@ export default class ImageBuckets {
         style: { visibility: 'hidden' },  
         onchange: e => {
 
-          const fr = new FileReader();
-          fr.readAsDataURL(e.target.files[0]);
-          fr.addEventListener('load', fe => {
+          getUid().then(uid => {
 
-            const img = fe.target.result;
+            let formdata = new FormData();
+            formdata.append('mosaicImg', e.target.files[0]);
+            formdata.append('uid', uid);
+  
+            let xhr = new XMLHttpRequest();
+            xhr.open("POST", "http://127.0.0.1:8814/upload_mosaic_img", true);
+            xhr.onload = () => {
 
-            m.mount(document.body, () => { return { 
-              view: vnode => m(Mosaic, { img })
-            } });
+              const fr = new FileReader();
+              fr.readAsDataURL(e.target.files[0]);
+              fr.addEventListener('load', fe => {
+
+                m.route(document.body, `/${uid}`, {
+                  '/:id': Mosaic,
+                });
+                
+              })
+
+            }
+            xhr.send(formdata);
 
           })
           
@@ -137,8 +150,6 @@ export default class ImageBuckets {
           }
         }),
       ]),
-
-      // m(Mosaic),
 
       m('div', { class: `img-grid ${this.selection.active ? 'selectmode' : ''}` },
 

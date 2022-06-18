@@ -1,4 +1,5 @@
-from flask import Flask, request, send_file, send_from_directory
+from flask import Flask, request, send_file
+from flask_cors import CORS, cross_origin
 
 from os import path, listdir, remove
 from shutil import rmtree
@@ -27,10 +28,12 @@ def read_json(file_name):
 app = Flask(__name__)
 
 @app.route('/')
+@cross_origin()
 def home():
   return 'hey!'
 
 @app.route('/upload_images', methods=['POST'])
+@cross_origin()
 def upload():
   if request.method == 'POST':
     
@@ -59,7 +62,31 @@ def upload():
 
   return 'use post request'
 
+@app.route('/upload_mosaic_img', methods=['POST'])
+@cross_origin()
+def upload_mosaic_img():
+
+  id = request.form.get('uid')
+  mosaic_img = request.files.get('mosaicImg')
+
+  if id and mosaic_img:
+    mosaic_img.save(path.join('out', id, 'mosaic.jpg'))
+    return id
+
+  else:
+    return 'no id or mosaic image'
+
+@app.route('/get_mosaic_img', methods=['GET'])
+@cross_origin()
+def send_mosaic_img():
+
+  id = request.args.get('uid')
+  mosaic_img = to_base64(path.join('out', id, 'mosaic.jpg'))
+
+  return { "img": mosaic_img }
+
 @app.route('/get_img_count', methods=['GET'])
+@cross_origin()
 def send_image_count():
   
   id = request.args.get('id')
@@ -72,6 +99,7 @@ def send_image_count():
   return str(len(img_list))
 
 @app.route('/get_images', methods=['GET'])
+@cross_origin()
 def send_images():
   id = request.args.get('id')
   palette_type = request.args.get('palette') or 'avg'
@@ -94,6 +122,7 @@ def send_images():
     return 'NONE'
 
 @app.route('/remove_imgs', methods=['POST'])
+@cross_origin()
 def remove_images():
   body = request.get_json(force=True)
   id = body['id']
@@ -104,6 +133,7 @@ def remove_images():
   return 'DONE'
 
 @app.route('/generate_mosaic', methods=['POST'])
+@cross_origin()
 def generate_mosaic():
   body = request.get_json(force=True)
   
@@ -147,11 +177,13 @@ def generate_mosaic():
   return { "img": img_base64 }
 
 @app.route('/get_mosaic')
+@cross_origin()
 def send_mosaic():
   id = request.args.get('uid')
 
   return send_file(path.join('out', id, 'final.jpg'))
 
-
 if __name__ == "__main__":
   app.run(port=8814)
+
+CORS(app, resources={r"*": {"origins": "*"}})

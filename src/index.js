@@ -57,4 +57,7 @@ export default class Main {
   }
 }
 
-m.mount(document.body, Main);
+m.route(document.body, '/', {
+  '/': Main,
+  '/:id': Mosaic,
+});

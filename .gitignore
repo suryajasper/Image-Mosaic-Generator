@@ -108,3 +108,6 @@ out*/
 data*/
 background_imgs/
 spotify_accounts/
+
+# python
+__pycache__/
