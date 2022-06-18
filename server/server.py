@@ -27,11 +27,6 @@ def read_json(file_name):
 
 app = Flask(__name__)
 
-@app.route('/')
-@cross_origin()
-def home():
-  return 'hey!'
-
 @app.route('/upload_images', methods=['POST'])
 @cross_origin()
 def upload():

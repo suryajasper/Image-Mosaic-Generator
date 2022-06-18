@@ -37,7 +37,7 @@ module.exports = {
         'application-name': 'Image Mosaic Generator',
         description: 'Generate a replica of any image constructed from a library of other images',
       },
-      filename: 'templates/index.html',
+      filename: 'index.html',
     }),
     new webpack.DefinePlugin({
       'process.env.ENVIRONMENT': "'BROWSER'"
