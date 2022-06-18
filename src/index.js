@@ -32,8 +32,7 @@ export default class Main {
       })
         .then(count => {
           if (count > 0)
-            m.mount(document.body, ImageBuckets);
-            // m.mount(document.body, Mosaic);
+            m.route.set('/main');
         })
 
     });
@@ -49,7 +48,7 @@ export default class Main {
 
       m(ImageUpload, {
         success: () => {
-          m.mount(document.body, ImageBuckets);
+          m.route.set('/main')
         }
       })
 
@@ -59,5 +58,6 @@ export default class Main {
 
 m.route(document.body, '/', {
   '/': Main,
-  '/:id': Mosaic,
+  '/main': ImageBuckets,
+  '/mosaic/:id/:seed': Mosaic,
 });

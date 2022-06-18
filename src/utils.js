@@ -1,3 +1,4 @@
+import Rand from "rand-seed";
 
 function msToTime(s) {
   const ms = s % 1000;
@@ -48,9 +49,20 @@ function numToPercent(num) {
   return `${Math.round(num*100*100)/100}%`;
 }
 
-function randArr(array, weighted=true) {
+function randomStr(length) {
+  var randomChars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  var result = '';
+  for ( var i = 0; i < length; i++ ) {
+      result += randomChars.charAt(Math.floor(Math.random() * randomChars.length));
+  }
+  return result;
+}
+
+function randArr(array, seed, weighted=true) {
 
   if (Array.isArray(array)) {
+
+    const rand = new Rand(seed);
 
     let ind = 0;
 
@@ -59,7 +71,7 @@ function randArr(array, weighted=true) {
       let sum = weights.reduce((a, b) => a + b);
       weights = weights.map(w => w / sum);
       
-      let r = Math.random();
+      let r = rand.next();
       
       for (let i = 1; i < weights.length; i++) {
         weights[i] = weights[i] + weights[i-1];
@@ -70,7 +82,7 @@ function randArr(array, weighted=true) {
       }
     }
     else
-      ind = Math.floor(Math.random() * array.length);
+      ind = Math.floor(rand.next() * array.length);
 
     return array[ind];
   }
@@ -101,4 +113,4 @@ function base64ToArrayBuffer(base64) {
   return bytes.buffer;
 }
 
-module.exports = { msToTime, arr2D, init2D, splitArray, numToPercent, randArr, downloadURI, base64ToArrayBuffer };
+export { msToTime, arr2D, init2D, splitArray, numToPercent, randArr, randomStr, downloadURI, base64ToArrayBuffer };

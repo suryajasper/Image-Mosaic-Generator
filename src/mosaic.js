@@ -3,7 +3,7 @@ import './css/mosaic.scss';
 import WordArt from './wordart';
 import Jimp from 'jimp';
 import { colors, loadColors, closestColors, hexToRGB, rgbaObjToCss, rgbObjToArr, rgbArrToObj } from './color';
-import { init2D, randArr, downloadURI, base64ToArrayBuffer } from './utils';
+import { init2D, randArr, downloadURI, base64ToArrayBuffer, randomStr } from './utils';
 import getUid from './auth';
 import Main from '.';
 
@@ -58,7 +58,7 @@ export default class Mosaic {
       this.admin = uid === id;
     })
 
-    m.request(`http://localhost:8814/get_mosaic_img?uid=${id}`, {
+    m.request(`http://suryajasper.com:8814/get_mosaic_img?uid=${id}`, {
       method: 'GET',
     }).then(({img}) => {
 
@@ -66,9 +66,9 @@ export default class Mosaic {
 
       this.image = img || window.localStorage.getItem('img');
 
-      loadColors().then(() => {
+      loadColors(id).then(() => {
         m.redraw();
-        this.reload();
+        this.reload(vnode.attrs.seed);
       })
 
     })
@@ -110,10 +110,12 @@ export default class Mosaic {
 
   }
 
-  reload() {
+  reload(seed) {
 
     let new_height = this.resolution;
     let new_width = this.resolution;
+
+    console.log('reloading with', seed);
 
     Jimp.read(this.image)
       .then(img => {
@@ -141,7 +143,7 @@ export default class Mosaic {
                         resized.getPixelColor(c, r)
                       )
                     ), this.balance,
-                  ), false,
+                  ), seed, false,
                 ).i
               ]
             )
@@ -186,7 +188,12 @@ export default class Mosaic {
 
   updateParam(param, value, reload) {
     this[param] = parseFloat(value);
-    if (reload) this.reload();
+    if (reload) {
+      let newSeed = randomStr(6);
+      let id = m.route.param('id');
+      m.route.set(`/mosaic/${id}/${newSeed}`);
+      this.reload(newSeed);
+    }
   }
 
   view(vnode) {
@@ -226,7 +233,7 @@ export default class Mosaic {
           .map(el => m(RangeGroup, el))
           .concat([
             m('div.button-group', [
-              m('button', { onclick: e => { m.route(document.body, '/', { '/': Main }); } }, 'Back'),
+              m('button', { onclick: e => { m.route.set('/main') } }, 'Back'),
               m('button', { onclick: e => { this.export() } }, 'Export'),
             ]),
           ])
