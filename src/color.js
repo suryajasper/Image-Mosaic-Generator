@@ -5,9 +5,9 @@ import getUid from './auth';
 
 let colors = [];
 
-async function loadColors() {
+async function loadColors(param_uid) {
 
-  let uid = await getUid();
+  let uid = param_uid || await getUid();
 
   let res = await fetch(`http://suryajasper.com:8814/get_images?id=${uid}`);
 
