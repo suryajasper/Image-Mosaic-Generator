@@ -1,6 +1,8 @@
 import m from 'mithril';
 import getUid from './auth';
 
+import Rand from 'rand-seed';
+
 import ImageUpload from './imageupload';
 import IconButton from './icon-button';
 
@@ -8,6 +10,8 @@ import './css/mosaic.scss';
 import Mosaic from './mosaic';
 import Cookies from './cookies';
 import Main from '.';
+
+import { randomStr, ParamParser } from './utils';
 
 export default class ImageBuckets {
 
@@ -80,9 +84,8 @@ export default class ImageBuckets {
               fr.readAsDataURL(e.target.files[0]);
               fr.addEventListener('load', fe => {
 
-                m.route(document.body, `/${uid}`, {
-                  '/:id': Mosaic,
-                });
+                let paramStr = ParamParser.encode(85, 3, 0.2);
+                m.route.set(`/mosaic/${uid}/${randomStr(6)}/${paramStr}`);
                 
               })
 
@@ -127,9 +130,8 @@ export default class ImageBuckets {
                 selected: selectedImgs,
               }
             });
-
-            Cookies.erase('uid');
-            m.mount(document.body, Main);
+            
+            m.route.set('/');
 
           }
         }),
@@ -137,17 +139,12 @@ export default class ImageBuckets {
           icon: 'upload',
           title: 'Upload More Images', 
           hidden: this.selection.active,
-          onclick: () => {
-            document.querySelector('#csvIn').click();
-          }
+          onclick: () => { document.querySelector('#csvIn').click() },
         }),
         m(IconButton, {
           icon: 'build',
           title: 'Generate Mosaic', 
-          onclick: () => {
-            document.querySelector('#mosaicBaseIn').click();
-            // m.mount(document.body, Mosaic);
-          }
+          onclick: () => { document.querySelector('#mosaicBaseIn').click() },
         }),
       ]),
 

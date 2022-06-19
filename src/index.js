@@ -59,5 +59,5 @@ export default class Main {
 m.route(document.body, '/', {
   '/': Main,
   '/main': ImageBuckets,
-  '/mosaic/:id/:seed': Mosaic,
+  '/mosaic/:id/:seed/:params': Mosaic,
 });

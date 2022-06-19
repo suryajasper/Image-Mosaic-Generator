@@ -119,4 +119,13 @@ function base64ToArrayBuffer(base64) {
   return bytes.buffer;
 }
 
-export { msToTime, arr2D, init2D, splitArray, numToPercent, randArr, randomStr, downloadURI, base64ToArrayBuffer };
+const ParamParser = {
+  encode(...params) {
+    return btoa(params.join(','));
+  },
+  decode(str) {
+    return atob(str).split(',');
+  }
+}
+
+export { msToTime, arr2D, init2D, splitArray, numToPercent, randArr, randomStr, downloadURI, base64ToArrayBuffer, ParamParser };

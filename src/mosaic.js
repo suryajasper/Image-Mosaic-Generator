@@ -3,7 +3,7 @@ import './css/mosaic.scss';
 import WordArt from './wordart';
 import Jimp from 'jimp';
 import { colors, loadColors, closestColors, hexToRGB, rgbaObjToCss, rgbObjToArr, rgbArrToObj } from './color';
-import { init2D, randArr, downloadURI, base64ToArrayBuffer, randomStr } from './utils';
+import { init2D, randArr, downloadURI, base64ToArrayBuffer, randomStr, ParamParser } from './utils';
 import getUid from './auth';
 import Main from '.';
 
@@ -45,9 +45,10 @@ export default class Mosaic {
 
     this.admin = false;
 
-    this.resolution = 85;
-    this.balance = 3;
-    this.tintLayerAlpha = 0.2;
+    let [resolution, balance, tintLayerAlpha] = ParamParser.decode(vnode.attrs.params);
+    this.resolution = parseInt(resolution);
+    this.balance = parseInt(balance);
+    this.tintLayerAlpha = parseFloat(tintLayerAlpha);
   }
   
   oninit(vnode) {
@@ -187,13 +188,17 @@ export default class Mosaic {
   }
 
   updateParam(param, value, reload) {
+
     this[param] = parseFloat(value);
-    if (reload) {
-      let newSeed = randomStr(6);
-      let id = m.route.param('id');
-      m.route.set(`/mosaic/${id}/${newSeed}`);
-      this.reload(newSeed);
-    }
+
+    let seed = reload ? randomStr(6) : m.route.param('seed');
+    let id = m.route.param('id');
+    let paramStr = ParamParser.encode(this.resolution, this.balance, this.tintLayerAlpha);
+
+    if (reload) this.reload(seed);
+
+    m.route.set(`/mosaic/${id}/${seed}/${paramStr}`);
+
   }
 
   view(vnode) {
