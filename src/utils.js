@@ -58,11 +58,16 @@ function randomStr(length) {
   return result;
 }
 
+let rand = {
+  seed: undefined,
+  gen: undefined,
+};
+
 function randArr(array, seed, weighted=true) {
 
   if (Array.isArray(array)) {
-
-    const rand = new Rand(seed);
+    
+    if (rand.seed !== seed) rand = { seed, gen: new Rand(seed) };
 
     let ind = 0;
 
@@ -71,7 +76,7 @@ function randArr(array, seed, weighted=true) {
       let sum = weights.reduce((a, b) => a + b);
       weights = weights.map(w => w / sum);
       
-      let r = rand.next();
+      let r = rand.gen.next();
       
       for (let i = 1; i < weights.length; i++) {
         weights[i] = weights[i] + weights[i-1];
@@ -81,8 +86,9 @@ function randArr(array, seed, weighted=true) {
         }
       }
     }
-    else
-      ind = Math.floor(rand.next() * array.length);
+    else {
+      ind = Math.floor(rand.gen.next() * array.length);
+    }
 
     return array[ind];
   }
