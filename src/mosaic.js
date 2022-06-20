@@ -1,9 +1,8 @@
 import m from 'mithril';
 import './css/mosaic.scss';
-import WordArt from './wordart';
 import Jimp from 'jimp';
 import { colors, loadColors, closestColors, hexToRGB, rgbaObjToCss, rgbObjToArr, rgbArrToObj } from './color';
-import { init2D, randArr, downloadURI, base64ToArrayBuffer, randomStr, ParamParser } from './utils';
+import { initArr, randArr, downloadURI, base64ToArrayBuffer, randomStr, ParamParser } from './utils';
 import getUid from './auth';
 import Main from '.';
 
@@ -37,10 +36,9 @@ export default class Mosaic {
   constructor(vnode) {
     this.image = null;
     this.selectedImg = null;
-    this.src = '';
     this.color = '';
     this.bitmap = [[]];
-    this.tintlayer = [[]];
+    this.source = [[]];
     this.uniques = [];
 
     this.admin = false;
@@ -85,9 +83,9 @@ export default class Mosaic {
   async export() {
 
     const uid = await getUid();
-    const idMap = this.bitmap.map(row => row.map(el => el.id)); 
     const tintFactor = this.tintLayerAlpha;
-    const tintMap = this.tintlayer.map(row => row.map(rgbObjToArr));
+    const idMap = this.bitmap.map(row => row.map(el => el.id)); 
+    const tintMap = this.bitmap.map(row => row.map(el => rgbObjToArr(el.color)));
 
     const data = { uid, idMap, tintFactor, tintMap };
     
@@ -126,48 +124,93 @@ export default class Mosaic {
           new_height = parseInt(new_width / img.bitmap.width * img.bitmap.height);
 
         let resized = img.resize(new_width, new_height, Jimp.RESIZE_NEAREST_NEIGHBOR);
-        resized.getBase64(Jimp.MIME_JPEG, (err, res) => {
-          this.src = res; 
 
-          Jimp.read
-          m.redraw();
-        });
-
-        this.bitmap = init2D(resized.bitmap.height, resized.bitmap.width)
-          .map((row, r) => 
-            row.map((_, c) => 
-              colors[
-                randArr(
-                  closestColors(
-                    rgbObjToArr(
-                      Jimp.intToRGBA(
-                        resized.getPixelColor(c, r)
-                      )
-                    ), this.balance,
-                  ), seed, false,
-                ).i
-              ]
+        this.source = initArr([resized.bitmap.height, resized.bitmap.width])
+          .map((row, r) => row.map((_, c) => 
+            Jimp.intToRGBA( 
+              resized.getPixelColor(c, r)
             )
+          ));
+
+        this.bitmap = this.source
+          .map(row => 
+            row.map(color => {
+
+              const id = randArr(
+                closestColors(
+                  rgbObjToArr(color), colors, this.balance,
+                ), seed, false,
+              ).i;
+
+              return { color, id, img: colors[id].img };
+
+            })
           );
 
         this.uniques = [... new Set(this.bitmap
           .reduce((a, b) => a.concat(b))
           .map(pix => pix.id)
         )];
-        
-        this.tintlayer = init2D(resized.bitmap.height, resized.bitmap.width)
-          .map((row, r) => 
-            row.map((_, c) => 
-              Jimp.intToRGBA(
-                resized.getPixelColor(c, r)
-              )
-            )
-          );
 
         m.redraw();
 
       })
       .catch(console.error)
+  }
+
+  useAll() {
+    
+    let frequency = initArr([colors.length], 0);
+
+    let idMat = this.bitmap
+      .map(row => 
+        row.map(({id}) => { 
+          frequency[id]++; 
+          return id; 
+        })
+      );
+
+    let imgColors = this.source
+      .map((row, y) => 
+        row.map((color, x) => {
+          return {
+            color: rgbObjToArr(color),
+            pos: { x, y },
+          }
+        })
+      )
+      .flat();
+
+    let prox = colors.map(({color}) =>
+      closestColors(color, imgColors, (this.resolution/4)**2)
+        .map(el => imgColors[el.i])
+    );
+
+    for (let i = 0; i < frequency.length; i++) {
+
+      for (let candidate of prox[i]) {
+
+        let {x, y} = candidate.pos;
+
+        let imgInPos = this.bitmap[y][x].id;
+
+        if (frequency[i] < frequency[imgInPos] && frequency[imgInPos] > 1) {          
+          this.bitmap[y][x].img = colors[i].img;
+          this.bitmap[y][x].id = i;
+
+          frequency[imgInPos]--;
+          frequency[i]++;
+        }
+        
+      }
+
+    }
+
+    this.uniques = [... new Set(this.bitmap
+      .reduce((a, b) => a.concat(b))
+      .map(pix => pix.id)
+    )];
+
   }
 
   getGridSize() {
@@ -219,7 +262,7 @@ export default class Mosaic {
             }, [
               m('img', {src: pixel.img}),
               m('div.tint-layer', {
-                style: { 'background-color': rgbaObjToCss( this.tintlayer[r][c], { a: this.tintLayerAlpha } ), }
+                style: { 'background-color': rgbaObjToCss( pixel.color, { a: this.tintLayerAlpha } ), }
               }),
             ]);
 
@@ -239,7 +282,9 @@ export default class Mosaic {
           .concat([
             m('div.button-group', [
               m('button', { onclick: e => { m.route.set('/main') } }, 'Back'),
+              m('button', { onclick: e => { this.useAll() } }, 'Use All'),
               m('button', { onclick: e => { this.export() } }, 'Export'),
+              m('p', `${this.uniques.length} unique`),
             ]),
           ])
         )) : '',

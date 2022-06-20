@@ -23,14 +23,14 @@ async function loadColors(param_uid) {
 
 }
 
-function closestColors(color, n=3) {
+function closestColors(color, colorArr, n=3) {
   
   let mins = [];
-
+  
   for (let i = 0; i < n; i++) mins.push({i: 0, d: 1e99});
-
-  for (let i = 0; i < colors.length; i++) {
-    let [r1, g1, b1, _] = colors[i].color;
+  
+  for (let i = 0; i < colorArr.length; i++) {
+    let [r1, g1, b1, _] = colorArr[i].color;
     let [r2, g2, b2] = color;
     
     const d = ((r2-r1)*0.30)**2 + ((g2-g1)*0.59)**2 + ((b2-b1)*0.11)**2;

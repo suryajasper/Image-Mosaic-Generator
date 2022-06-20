@@ -26,14 +26,16 @@ function arr2D(arr1D, rows) {
   return newArr;
 }
 
-function init2D(rows, cols, val=0) {
+function initArr(dims, val=0) {
+
+  if (dims.length === 0) return val;
+
+  let toPush = initArr(dims.slice(1), val);
   let arr = [];
-  for (let r = 0; r < rows; r++) {
-    let row = [];
-    for (let c = 0; c < cols; c++) row.push(val);
-    arr.push(row);
-  }
+  for (let i = 0; i < dims[0]; i++) arr.push(toPush);
+
   return arr;
+
 }
 
 function splitArray(arr, size) {
@@ -128,4 +130,4 @@ const ParamParser = {
   }
 }
 
-export { msToTime, arr2D, init2D, splitArray, numToPercent, randArr, randomStr, downloadURI, base64ToArrayBuffer, ParamParser };
+export { msToTime, arr2D, initArr, splitArray, numToPercent, randArr, randomStr, downloadURI, base64ToArrayBuffer, ParamParser };
