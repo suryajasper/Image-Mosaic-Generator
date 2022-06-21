@@ -19,9 +19,13 @@ function RangeGroup(vnode) {
           type: 'range',
           min, max, step, 
           value: newVal, 
+          disabled: vnode.attrs.disabled,
 
           oninput: e => {
             newVal = e.target.value;
+          },
+
+          onchange: e => {
             vnode.attrs.update(newVal);
           }
         }),
@@ -36,12 +40,14 @@ export default class Mosaic {
   constructor(vnode) {
     this.image = null;
     this.selectedImg = null;
-    this.color = '';
+
     this.bitmap = [[]];
     this.source = [[]];
     this.uniques = [];
 
     this.admin = false;
+
+    this.loading = true;
 
     let [resolution, balance, tintLayerAlpha] = ParamParser.decode(vnode.attrs.params);
     this.resolution = parseInt(resolution);
@@ -82,6 +88,8 @@ export default class Mosaic {
 
   async export() {
 
+    this.loading = true;
+
     const uid = await getUid();
     const tintFactor = this.tintLayerAlpha;
     const idMap = this.bitmap.map(row => row.map(el => el.id)); 
@@ -105,11 +113,14 @@ export default class Mosaic {
     a.href = blobUrl;
     document.body.appendChild(a);
     a.click();
-    // a.remove();
+    
+    this.loading = false;
 
   }
 
   reload(seed) {
+
+    this.loading = true;
 
     let new_height = this.resolution;
     let new_width = this.resolution;
@@ -152,6 +163,7 @@ export default class Mosaic {
           .map(pix => pix.id)
         )];
 
+        this.loading = false;
         m.redraw();
 
       })
@@ -162,11 +174,10 @@ export default class Mosaic {
     
     let frequency = initArr([colors.length], 0);
 
-    let idMat = this.bitmap
-      .map(row => 
-        row.map(({id}) => { 
-          frequency[id]++; 
-          return id; 
+    this.bitmap
+      .forEach(row => 
+        row.forEach(({id}) => { 
+          frequency[id]++;
         })
       );
 
@@ -215,19 +226,20 @@ export default class Mosaic {
 
   getGridSize() {
 
-    let height = this.bitmap.length;
-    let width = this.bitmap[0].length;
+    let height = this.source.length;
+    let width = this.source[0].length;
 
     if (width/height < window.innerWidth/window.innerHeight)
       return {
-        width: `${this.bitmap[0].length/this.bitmap.length*100}vh`,
+        width: `${this.source[0].length/this.source.length*100}vh`,
         height: `100vh`,
       }
 
     return {
       width: `100vw`,
-      height: `${this.bitmap.length/this.bitmap[0].length*100}vw`,
+      height: `${this.source.length/this.source[0].length*100}vw`,
     }
+
   }
 
   updateParam(param, value, reload) {
@@ -254,11 +266,11 @@ export default class Mosaic {
           'grid-template-columns': `repeat(${this.bitmap[0].length}, 1fr)`,
         }, this.getGridSize())
       }, 
-        this.bitmap.map(
-          (row, r) => row.map((pixel, c) => {
+        this.bitmap.map(row => 
+          row.map(pixel => {
 
             return m('div', {
-              class: `img-group ${(this.selectedImg !== null && pixel.id !== this.selectedImg) ? 'grayed' : ''}`
+              class: `img-group ${ this.loading || (this.selectedImg !== null && pixel.id !== this.selectedImg) ? 'grayed' : '' }`
             }, [
               m('img', {src: pixel.img}),
               m('div.tint-layer', {
@@ -270,21 +282,29 @@ export default class Mosaic {
         )
       ),
 
+      m('div.mosaic-overlay', {
+        style: Object.assign({
+          display: this.loading ? 'flex' : 'none',
+        }, this.source[0].length > 0 ? this.getGridSize() : {})
+      }, [
+        m('div.loader'),
+      ]),
+
       m('div.mosaic-sidebar', [
 
         this.admin ? (m('div.params', 
           [
-            {title: 'Resolution', min: 30, max: 120, step: 1, initialVal: this.resolution, update: val => this.updateParam('resolution', val, true)},
-            {title: 'Noise', min: 1, max: 10, step: 1, initialVal: this.balance, update: val => this.updateParam('balance', val, true)},
-            {title: 'Tint', min: 0, max: 1, step: 0.05, initialVal: this.tintLayerAlpha, update: val => this.updateParam('tintLayerAlpha', val, false)},
+            {title: 'Resolution', min: 30, max: 120, step: 1, initialVal: this.resolution, disabled: this.loading, update: val => this.updateParam('resolution', val, true)},
+            {title: 'Noise', min: 1, max: 10, step: 1, initialVal: this.balance, disabled: this.loading, update: val => this.updateParam('balance', val, true)},
+            {title: 'Tint', min: 0, max: 1, step: 0.02, initialVal: this.tintLayerAlpha, disabled: this.loading, update: val => this.updateParam('tintLayerAlpha', val, false)},
           ]
           .map(el => m(RangeGroup, el))
           .concat([
             m('div.button-group', [
               m('button', { onclick: e => { m.route.set('/main') } }, 'Back'),
-              m('button', { onclick: e => { this.useAll() } }, 'Use All'),
-              m('button', { onclick: e => { this.export() } }, 'Export'),
-              m('p', `${this.uniques.length} unique`),
+              m('button', { disabled: this.loading, onclick: e => { this.useAll() } }, 'Use All'),
+              m('button', { disabled: this.loading, onclick: e => { this.export() } }, 'Export'),
+              m('p', `${this.uniques.length}/${colors.length} ${Math.round(this.uniques.length/colors.length*100*10)/10}%`),
             ]),
           ])
         )) : '',
