@@ -11,6 +11,7 @@ from PIL import Image
 from transforms import RGBTransform
 import numpy as np
 
+from auth import create_user, check_user
 from img_process import add_photos
 
 def to_base64(file_name):
@@ -32,6 +33,38 @@ def files_in_dir(dir_name, include_path=True):
   return files
 
 app = Flask(__name__)
+
+@app.route('/create_user', methods=['POST'])
+@cross_origin()
+def create_user_and_send_uid():
+  body = request.get_json(force=True)
+
+  email = body['email']
+  pwd = body['password']
+
+  uid = create_user(email, pwd)
+
+  print('new user', uid)
+
+  if uid is None:
+    return { "error": f'A user by the email address {email} already exists. Try logging in.' }, 401
+  
+  return { "uid": uid }
+
+@app.route('/login_user', methods=['POST'])
+@cross_origin()
+def login_user_and_send_uid():
+  body = request.get_json(force=True)
+
+  email = body['email']
+  pwd = body['password']
+
+  uid = check_user(email, pwd)
+
+  if uid is None:
+    return { "error": "Invalid Login Credentials" }, 401
+  
+  return { "uid": uid }
 
 @app.route('/upload_images', methods=['POST'])
 @cross_origin()
