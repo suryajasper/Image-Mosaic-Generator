@@ -24,7 +24,6 @@ const HtmlWebpackPlugin = require('html-webpack-plugin');
  */
 
 const TerserPlugin = require('terser-webpack-plugin');
-const MiniCssExtractPlugin = require('mini-css-extract-plugin');
 
 module.exports = {
   mode: 'development',
@@ -37,7 +36,6 @@ module.exports = {
         'application-name': 'Image Mosaic Generator',
         description: 'Generate a replica of any image constructed from a library of other images',
       },
-      filename: 'index.html',
     }),
     new webpack.DefinePlugin({
       'process.env.ENVIRONMENT': "'BROWSER'"
@@ -117,7 +115,7 @@ module.exports = {
     filename: 'static/js/build.[contenthash].js',
     path: path.join(__dirname, '/dist'),
     chunkFilename: 'static/js/[name].[contenthash].js',
-    publicPath: '../',
+    publicPath: '/',
   },
 
   optimization: {

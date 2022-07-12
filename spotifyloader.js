@@ -106,7 +106,6 @@ async function getAlbums() {
 
 }
 
-//getUserPlaylists().then(console.log);
 getAlbums().then(console.log);
 
 /*

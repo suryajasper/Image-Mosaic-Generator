@@ -1,5 +1,4 @@
 import m from 'mithril';
-import Jimp from 'jimp';
 
 import './css/upload.scss';
 import './css/progress-bar.scss';
@@ -8,9 +7,8 @@ import ImageUpload from './imageupload';
 import Mosaic from './mosaic';
 import ImageBuckets from './imagebuckets';
 
-import { Icon, icons } from './icons';
-import { splitArray, numToPercent } from './utils';
-import getUid from './auth';
+import { getUid } from './auth';
+import Login from './login';
 import Cookies from './cookies';
 
 function importAll(r) {
@@ -21,6 +19,13 @@ function importAll(r) {
 const exampleImgs = importAll(require.context('./imgs/examples/', false, /\.(png|jpe?g)$/));
 
 export default class Main {
+
+  constructor(vnode) {
+    this.popup = {
+      active: false,
+      signup: false,
+    }
+  }
 
   oninit(vnode) {
 
@@ -50,7 +55,31 @@ export default class Main {
         success: () => {
           m.route.set('/main')
         }
-      })
+      }),
+
+      m(Login, {
+        active: this.popup.active,
+        signup: this.popup.signup,
+        status: (type, res) => {
+          if (type === 'success') {
+            Cookies.set('uid', res, 24);
+            m.route.set('/main');
+          } else if (type === 'failed')
+            alert(res);
+          this.popup.active = false;
+        }
+      }),
+
+      m("footer", [
+        m('div.login-button-container', [
+          m('div', { onclick: () => {
+            this.popup = { active: true, signup: false };
+          } }, 'Log In'),
+          m('div',  { onclick: () => {
+            this.popup = { active: true, signup: true };
+          } }, 'Sign up'),
+        ]),
+      ]),
 
     ];
   }
@@ -59,5 +88,5 @@ export default class Main {
 m.route(document.body, '/', {
   '/': Main,
   '/main': ImageBuckets,
-  '/mosaic/:id/:seed/:params': Mosaic,
+  '/mosaic/:mode/:id/:seed/:params': Mosaic,
 });

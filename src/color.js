@@ -1,11 +1,18 @@
 
-import getUid from './auth';
+import { getUid } from './auth';
+import { getAlbums } from './spotify';
 // import colors from '../spotify_accounts/out_algebrainer.json';
 // import colors from './data/avg.json';
 
 let colors = [];
 
-async function loadColors(param_uid) {
+async function loadColors(param_uid, use_spotify) {
+
+  if (use_spotify) {
+    colors = await getAlbums();
+    colors = colors.map((color, i) => Object.assign(color, {id: i}));
+    return;
+  }
 
   let uid = param_uid || await getUid();
 

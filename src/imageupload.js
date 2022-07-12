@@ -3,7 +3,7 @@ import './css/upload.scss';
 import './css/progress-bar.scss';
 import { icons } from './icons';
 import { splitArray, numToPercent } from './utils';
-import getUid from './auth';
+import { getUid } from './auth';
 
 export default class ImageUpload {
   constructor() {

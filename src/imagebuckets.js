@@ -1,15 +1,11 @@
 import m from 'mithril';
-import getUid from './auth';
-
-import Rand from 'rand-seed';
+import { getUid } from './auth';
+import { getAlbums } from './spotify';
 
 import ImageUpload from './imageupload';
 import IconButton from './icon-button';
 
 import './css/mosaic.scss';
-import Mosaic from './mosaic';
-import Cookies from './cookies';
-import Main from '.';
 
 import { randomStr, ParamParser } from './utils';
 
@@ -19,6 +15,8 @@ export default class ImageBuckets {
     this.images = [];
 
     this.hideUpload = true;
+
+    this.mode = 'images';
 
     this.resetSelection();
   }
@@ -85,7 +83,7 @@ export default class ImageBuckets {
               fr.addEventListener('load', fe => {
 
                 let paramStr = ParamParser.encode(85, 3, 0.2);
-                m.route.set(`/mosaic/${uid}/${randomStr(6)}/${paramStr}`);
+                m.route.set(`/mosaic/${this.mode}/${uid}/${randomStr(6)}/${paramStr}`);
                 
               })
 
@@ -144,7 +142,12 @@ export default class ImageBuckets {
         m(IconButton, {
           icon: 'build',
           title: 'Generate Mosaic', 
-          onclick: () => { document.querySelector('#mosaicBaseIn').click() },
+          onclick: () => { this.mode = 'images'; document.querySelector('#mosaicBaseIn').click(); },
+        }),
+        m(IconButton, {
+          icon: 'spotify',
+          title: 'Spotify Mosaic', 
+          onclick: () => { this.mode = 'spotify'; document.querySelector('#mosaicBaseIn').click(); },
         }),
       ]),
 

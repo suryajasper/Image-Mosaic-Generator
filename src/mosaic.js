@@ -3,8 +3,9 @@ import './css/mosaic.scss';
 import Jimp from 'jimp';
 import { colors, loadColors, closestColors, hexToRGB, rgbaObjToCss, rgbObjToArr, rgbArrToObj } from './color';
 import { initArr, randArr, downloadURI, base64ToArrayBuffer, randomStr, ParamParser } from './utils';
-import getUid from './auth';
+import { getUid } from './auth';
 import Main from '.';
+import IconButton from './icon-button';
 
 function RangeGroup(vnode) {
   
@@ -53,6 +54,8 @@ export default class Mosaic {
     this.resolution = parseInt(resolution);
     this.balance = parseInt(balance);
     this.tintLayerAlpha = parseFloat(tintLayerAlpha);
+
+    this.mode = vnode.attrs.mode;
   }
   
   oninit(vnode) {
@@ -71,13 +74,12 @@ export default class Mosaic {
 
       this.image = img || window.localStorage.getItem('img');
 
-      loadColors(id).then(() => {
+      loadColors(id, vnode.attrs.mode === 'spotify').then(() => {
         m.redraw();
         this.reload(vnode.attrs.seed);
       })
 
     })
-
 
     window.onresize = e => {
       this.getGridSize();
@@ -124,8 +126,6 @@ export default class Mosaic {
 
     let new_height = this.resolution;
     let new_width = this.resolution;
-
-    console.log('reloading with', seed);
 
     Jimp.read(this.image)
       .then(img => {
@@ -252,13 +252,39 @@ export default class Mosaic {
 
     if (reload) this.reload(seed);
 
-    m.route.set(`/mosaic/${id}/${seed}/${paramStr}`);
+    m.route.set(`/mosaic/${this.mode}/${id}/${seed}/${paramStr}`);
 
   }
 
   view(vnode) {
 
     return m('div.mosaic-page', [
+
+      /*
+      m('div.tool-group', [
+        m(IconButton, {
+          icon: 'exit', 
+          title: 'Back', 
+          onclick: () => {
+            this.resetSelection();
+          }
+        }),
+        m(IconButton, {
+          icon: 'export', 
+          title: 'Export', 
+          onclick: () => {
+            this.resetSelection();
+          }
+        }),
+        m(IconButton, {
+          icon: 'gear', 
+          title: 'Clear Selection', 
+          onclick: () => {
+            this.resetSelection();
+          }
+        }),
+      ]),
+      */
 
       m('div', {
         class: 'mosaic-grid', 
@@ -294,7 +320,7 @@ export default class Mosaic {
 
         this.admin ? (m('div.params', 
           [
-            {title: 'Resolution', min: 30, max: 120, step: 1, initialVal: this.resolution, disabled: this.loading, update: val => this.updateParam('resolution', val, true)},
+            {title: 'Resolution', min: 30, max: 140, step: 1, initialVal: this.resolution, disabled: this.loading, update: val => this.updateParam('resolution', val, true)},
             {title: 'Noise', min: 1, max: 10, step: 1, initialVal: this.balance, disabled: this.loading, update: val => this.updateParam('balance', val, true)},
             {title: 'Tint', min: 0, max: 1, step: 0.02, initialVal: this.tintLayerAlpha, disabled: this.loading, update: val => this.updateParam('tintLayerAlpha', val, false)},
           ]

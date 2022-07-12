@@ -14,4 +14,36 @@ async function getUid() {
 
 }
 
-export default getUid;
+async function login(email, password) {
+
+  const res = await fetch('http://suryajasper.com:8814/login_user', {
+    method: 'POST',
+    body: JSON.stringify({ email, password }),
+  });
+
+  let body = await res.json();
+
+  if (body.uid)
+    return body.uid;
+
+  return body;
+
+}
+
+async function signup(email, password) {
+
+  const res = await fetch('http://suryajasper.com:8814/create_user', {
+    method: 'POST',
+    body: JSON.stringify({ email, password }),
+  });
+
+  let body = await res.json();
+
+  if (body.uid)
+    return body.uid;
+
+  return body;
+
+}
+
+export { getUid, login, signup };
