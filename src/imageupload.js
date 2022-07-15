@@ -2,7 +2,7 @@ import m from 'mithril';
 import './css/upload.scss';
 import './css/progress-bar.scss';
 import { icons } from './icons';
-import { splitArray, numToPercent } from './utils';
+import { splitArray, numToPercent, readFileAsync } from './utils';
 import { getUid } from './auth';
 
 export default class ImageUpload {
@@ -18,6 +18,10 @@ export default class ImageUpload {
     this.progress = {
       curr: 0,
       max: 1,
+      currImg: {
+        name: 'File Name',
+        src: '',
+      }
     };
   }
 
@@ -49,13 +53,15 @@ export default class ImageUpload {
     this.progress.max = images.length;
     this.progress.curr = 0;
 
-    const BATCH_SIZE = 5;
+    const BATCH_SIZE = 1;
     const uid = await getUid();
 
     let batches = splitArray(images, BATCH_SIZE);
 
     for (let batch of batches) {
-      const res = await this.uploadToServer(batch, uid);
+      this.progress.currImg.name = batch[0].name;
+      this.progress.currImg.src = await readFileAsync(batch[0]);
+      await this.uploadToServer(batch, uid);
       this.progress.curr += batch.length;
       m.redraw();
     }
@@ -117,19 +123,28 @@ export default class ImageUpload {
 
         ]),
 
-        m('div.progressbar', [
-          m('svg.progressbar__svg', 
-            m('circle.progressbar__svg-circle.circle-html.shadow-html', {
+        m('div.progress-container', [
 
-              style: `stroke-dashoffset: ${440 - (440 * 100 * this.progress.curr / this.progress.max) / 100}`,
-              cx: 80, cy: 80, r: 70,
+          m('div.progressbar', [
+            m('svg.progressbar__svg', 
+              m('circle.progressbar__svg-circle.circle-html.shadow-html', {
+  
+                style: `stroke-dashoffset: ${440 - (440 * 100 * this.progress.curr / this.progress.max) / 100}`,
+                cx: 80, cy: 80, r: 70,
+  
+              })
+            ),
+            m('span.progressbar__text.shadow-html', 
+              numToPercent(this.progress.curr / this.progress.max)
+            )
+          ]),
 
-            })
-          ),
-          m('span.progressbar__text.shadow-html', 
-            numToPercent(this.progress.curr / this.progress.max)
-          )
-        ])
+          m('div.upload-preview-container', [
+            m('img.upload-img-preview', {src: this.progress.currImg.src}),
+            m('span.upload-img-name', this.progress.currImg.name),
+          ])
+
+        ]),
 
       ])
 

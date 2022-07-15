@@ -121,6 +121,20 @@ function base64ToArrayBuffer(base64) {
   return bytes.buffer;
 }
 
+function readFileAsync(file) {
+  return new Promise((resolve, reject) => {
+    let reader = new FileReader();
+
+    reader.onload = () => {
+      resolve(reader.result);
+    };
+
+    reader.onerror = reject;
+
+    reader.readAsDataURL(file);
+  })
+}
+
 const ParamParser = {
   encode(...params) {
     return btoa(params.join(','));
@@ -130,4 +144,4 @@ const ParamParser = {
   }
 }
 
-export { msToTime, arr2D, initArr, splitArray, numToPercent, randArr, randomStr, downloadURI, base64ToArrayBuffer, ParamParser };
+export { msToTime, arr2D, initArr, splitArray, numToPercent, randArr, randomStr, downloadURI, base64ToArrayBuffer, readFileAsync, ParamParser };
