@@ -2,7 +2,7 @@ import m from 'mithril';
 
 import { signup, login } from './auth';
 
-import './css/login.css';
+import './css/login.scss';
 
 export default class Login {
   constructor(vnode) {

@@ -1,3 +1,6 @@
+from audioop import cross
+import threading
+
 from flask import Flask, request, send_file
 from flask_cors import CORS, cross_origin
 
@@ -13,6 +16,7 @@ import numpy as np
 
 from auth import create_user, check_user
 from img_process import add_photos
+from m_timer import set_timer, cleanup_loop
 
 def to_base64(file_name):
   data = ''
@@ -33,6 +37,11 @@ def files_in_dir(dir_name, include_path=True):
   return files
 
 app = Flask(__name__)
+
+@app.route('/fuck', methods=['GET'])
+@cross_origin()
+def fuck():
+  return 'fuck'
 
 @app.route('/create_user', methods=['POST'])
 @cross_origin()
@@ -104,18 +113,30 @@ def upload_mosaic_img():
   mosaic_img = request.files.get('mosaicImg')
 
   if id and mosaic_img:
-    mosaic_img.save(path.join('out', id, 'mosaic.jpg'))
+
+    save_path = path.join('out', id, 'mosaic.jpg')
+
+    mosaic_img.save(save_path)
+
+    set_timer(lambda: remove(save_path), 60 * 60)
+
     return id
 
   else:
-    return 'no id or mosaic image'
+    return {"error": "no id or mosaic image"}
 
 @app.route('/get_mosaic_img', methods=['GET'])
 @cross_origin()
 def send_mosaic_img():
 
   id = request.args.get('uid')
-  mosaic_img = to_base64(path.join('out', id, 'mosaic.jpg'))
+
+  mosaic_img_path = path.join('out', id, 'mosaic.jpg')
+
+  if not path.exists(mosaic_img_path):
+    return { "error": "no mosaic image stored" }
+
+  mosaic_img = to_base64(mosaic_img_path)
 
   return { "img": mosaic_img }
 
@@ -135,17 +156,24 @@ def send_image_count():
 @app.route('/get_images', methods=['GET'])
 @cross_origin()
 def send_images():
+  print('got request')
   id = request.args.get('id')
   palette_type = request.args.get('palette') or 'avg'
 
   if id and path.exists(path.join('out', id, 'imgs')):
     img_list = [ f for f in listdir(path.join('out', id, 'imgs')) if path.isfile(path.join('out', id, 'imgs', f)) ]
+    print('1')
     img_list = sorted(img_list, key = lambda f : int(f.split('.')[0]))
+    print('2')
     img_list = [ path.join('out', id, 'imgs', f) for f in img_list ]
+    print('3')
     img_list = list(map(to_base64, img_list))
+    print('4')
 
     color_file = path.join('out', id, 'data', f'{palette_type}.json')
     colors = read_json(color_file)
+
+    print('sending')
 
     return {
       "imgs": img_list,
@@ -233,6 +261,8 @@ def generate_mosaic():
   cv2.imwrite(out_path, img)
 
   img_base64 = to_base64(out_path)
+
+  remove(out_path)
   
   return { "img": img_base64 }
 
@@ -243,7 +273,19 @@ def send_mosaic():
 
   return send_file(path.join('out', id, 'final.jpg'))
 
-if __name__ == "__main__":
-  app.run('0.0.0.0', port=8814)
 
+def server_loop():
+  app.run('0.0.0.0', port=8814)
 CORS(app, resources={r"*": {"origins": "*"}})
+
+if __name__ == "__main__":
+
+  kwargs = {'host': '0.0.0.0', 'port': 8814, 'use_reloader': False, 'debug': True}
+  #threading.Thread(target=app.run, daemon=True, kwargs=kwargs).start()
+
+  cleanup_thread = threading.Thread(target=cleanup_loop, daemon=True)
+  cleanup_thread.start()
+
+  app.run(**kwargs)
+
+

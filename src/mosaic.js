@@ -68,11 +68,11 @@ export default class Mosaic {
 
     m.request(`http://suryajasper.com:8814/get_mosaic_img?uid=${id}`, {
       method: 'GET',
-    }).then(({img}) => {
+    }).then((res) => {
 
-      img = `data:image/jpg;base64,${img}`;
+      if (res.error) { return m.route.set('/'); }
 
-      this.image = img || window.localStorage.getItem('img');
+      this.image = `data:image/jpg;base64,${res.img}`;
 
       loadColors(id, vnode.attrs.mode === 'spotify').then(() => {
         m.redraw();
