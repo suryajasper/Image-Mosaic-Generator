@@ -1,6 +1,6 @@
 import m from 'mithril';
 
-import './css/icon-button.css';
+import './css/icon-button.scss';
 
 const ICON_COLOR = '#6066c7';
 
@@ -8,7 +8,7 @@ const Icon = {
   view(vnode) {
     return m('svg', { viewBox: '0 0 24 24', },
       m('path', {
-        fill: ICON_COLOR,
+        /*fill: ICON_COLOR,*/
         d: vnode.attrs.path,
       })
     );

@@ -1,3 +1,4 @@
+@import "./vars.scss";
 
 body {
   margin: 0;
@@ -72,8 +73,8 @@ $showPercentage: 0% + 100 * ($showTime / $totalTime);
   .drag-area{
 
     position: relative;
-    background-color: rgba(82, 86, 173, 0.6);
-    border: 2px dashed #fff;
+    background-color: rgba($primary-1, 0.7);
+    border: 2px dashed $light;
     height: 500px;
     width: 700px;
     border-radius: 5px;
@@ -95,17 +96,20 @@ $showPercentage: 0% + 100 * ($showTime / $totalTime);
       .icon{
         width: 100px;
         font-size: 100px;
-        color: #fff;
+        
+        path {
+          fill: $light;
+        }
       }
       header{
         font-size: 30px;
         font-weight: 500;
-        color: #fff;
+        color: $light;
       }
       span{
         font-size: 25px;
         font-weight: 500;
-        color: #fff;
+        color: $light;
         margin: 10px 0 15px 0;
       }
       button{
@@ -114,8 +118,8 @@ $showPercentage: 0% + 100 * ($showTime / $totalTime);
         font-weight: 500;
         border: none;
         outline: none;
-        background: #fff;
-        color: #5256ad;
+        background: $light;
+        color: $dark;
         border-radius: 5px;
         cursor: pointer;
       }
@@ -150,7 +154,7 @@ $showPercentage: 0% + 100 * ($showTime / $totalTime);
         flex-direction: column;
         justify-content: center;
         align-items: center;
-        color: white;
+        color: $light;
 
         img.upload-img-preview {
           width: 110px;
@@ -179,7 +183,7 @@ $showPercentage: 0% + 100 * ($showTime / $totalTime);
 }
 
 .upload-container.active .drag-area {
-  border: 2px solid #fff;
+  border: 2px solid $light;
 }
 .upload-container.failed .drag-area {
   border: 2px dashed #ff5858;

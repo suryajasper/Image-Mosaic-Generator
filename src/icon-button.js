@@ -2,7 +2,7 @@ import m from 'mithril';
 
 import { icons } from './icons';
 
-import './css/icon-button.css';
+import './css/icon-button.scss';
 
 const IconButton = {
   view(vnode) {
