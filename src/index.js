@@ -10,6 +10,7 @@ import ImageBuckets from './imagebuckets';
 import { getUid } from './auth';
 import Login from './login';
 import Cookies from './cookies';
+import PricingPlans from './pricing-plans';
 
 function importAll(r) {
   console.log(r);
@@ -88,5 +89,8 @@ export default class Main {
 m.route(document.body, '/', {
   '/': Main,
   '/main': ImageBuckets,
+  '/subscribe': PricingPlans,
   '/mosaic/:mode/:id/:seed/:params': Mosaic,
 });
+
+// m.mount(document.body, PricingPlans);

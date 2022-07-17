@@ -13,9 +13,7 @@ export default class ImageBuckets {
 
   constructor(vnode) {
     this.images = [];
-
     this.hideUpload = true;
-
     this.mode = 'images';
 
     this.resetSelection();
@@ -96,7 +94,7 @@ export default class ImageBuckets {
       }),
 
       m('div.header', { style: { display: this.selection.active ? 'block' : 'none' }, }, [
-        m('p', `${this.selection.selected.filter(el => el).length} Images Selected`),
+        m('p', `${this.selection.selected.filter(el => el).length} Images Selected (Shift+click to select in range)`),
       ]),
       
       m('div.tool-group', [

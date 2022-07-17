@@ -99,7 +99,7 @@ export default class ImageUpload {
 
         m('div.upload-start', [
 
-          m('div.icon', icons.upload),
+          m('div.icon', icons.cloud),
   
           m("header", "Get Started for Free!"),
           m("span", m.trust("Drag & Drop images OR")),
