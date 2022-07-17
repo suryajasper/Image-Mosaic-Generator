@@ -1,4 +1,3 @@
-from audioop import cross
 import threading
 
 from flask import Flask, request, send_file
@@ -115,8 +114,17 @@ def upload_mosaic_img():
   if id and mosaic_img:
 
     save_path = path.join('out', id, 'mosaic.jpg')
-
     mosaic_img.save(save_path)
+
+    MAX_STORED_DIM = 1000
+    cv_img = cv2.imread(save_path)
+    height, width, _ = cv_img.shape
+    max_dim = max(height, width)
+
+    if max_dim > MAX_STORED_DIM:
+      factor = max_dim / MAX_STORED_DIM
+      resized = cv2.resize(cv_img, ( int(width / factor), int(height / factor) ))
+      cv2.imwrite(save_path, resized)
 
     set_timer(lambda: remove(save_path), 60 * 60)
 
