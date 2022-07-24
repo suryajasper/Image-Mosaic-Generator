@@ -11,6 +11,7 @@ const planDetails = [
     color: "#316d26",
     icon: "bunny",
     cost: "$0.00",
+    subText: "Continue",
 
     pros: [
       "Maximum 30 photo uploads",
@@ -28,6 +29,7 @@ const planDetails = [
     color: "#2e607f",
     icon: "coffee",
     cost: "$0.00",
+    subText: "Sign up Free",
 
     pros: [
       "Maximum 100 photo uploads",
@@ -45,6 +47,7 @@ const planDetails = [
     color: "#592331",
     icon: "gift",
     cost: "$3.99",
+    subText: "Subscribe",
 
     pros: [
       "Maximum 350 photo uploads",
@@ -61,6 +64,7 @@ const planDetails = [
     color: "#411e76",
     icon: "tie",
     cost: "$5.99",
+    subText: "Subscribe",
 
     pros: [
       "Unlimited uploads",
@@ -108,7 +112,9 @@ const PricingPlans = {
           m('div.plan-price', [
             m('span.price-dollars', plan.cost),
             m('span.price-month', ' / month'),
-          ])
+          ]),
+
+          m('button.subscribe-button', plan.subText || "Subscribe"),
 
         ])
 

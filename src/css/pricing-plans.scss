@@ -1,0 +1,126 @@
+@import './vars.scss';
+
+.pricing-plans-page {
+  background-color: $light;
+  color: white;
+  width: 100%;
+  min-height: 100vh;
+  display: flex;
+  flex-wrap: wrap;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+}
+
+.plan-card {
+  box-shadow: -6px 6px 4px 0px rgba(#000, 0.35);
+  background-color: $primary-2;
+  margin: 20px;
+  border-radius: 10px;
+
+  .plan-header {
+    position: relative;
+    padding: 10px;
+    padding-top: 25px;
+
+    .plan-title {
+      transform: rotate(-90deg);
+      max-width: 70px;
+      text-align: center;
+      position: absolute;
+      top: 50%;
+      left: 0px;
+    }
+
+    .progressbar {
+      position: relative;
+      margin: auto;
+
+      .progressbar__svg-circle {
+        stroke-width: 8px;
+      }
+
+      .plan-icon {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        margin-top: 8px;
+        margin-left: -8px;
+        width: 60px;
+        transform: translate(-50%, -50%);
+  
+        path {
+          fill: white;
+        }
+      }
+    }
+  }
+
+  .plan-body {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    min-width: 365px;
+    background-color: rgba(#000, 0.25);
+    padding: 10px;
+    margin: 10px 0px 0px 0px;
+    border-radius: 10px;
+    
+    ul.plan-list {
+      list-style: none;
+      padding: 15px 40px 15px 40px;
+      margin-bottom: 5px;
+
+      li {
+        font-size: 0.9em;
+        padding: 3px 0px 3px 0px;
+  
+        &.pro {
+          font-weight: 600;
+          color: white;
+  
+          &::before {
+            content: "+";
+            padding-right: 5px;
+            font-weight: bold;
+          }
+        }
+        &.con {
+          font-weight: normal;
+          color: rgba(white, 0.5);
+  
+          &::before {
+            content: "-";
+            padding-right: 8px;
+            padding-left: 2px;
+            font-weight: bold;
+          }
+        }
+      }
+    }
+
+    .plan-price {
+      text-align: center;
+      margin-bottom: 15px;
+
+      .price-dollars {
+        font-size: 2em;
+        font-weight: 600;
+      }
+    }
+
+    button.subscribe-button {
+      cursor: pointer;
+      color: white;
+      background-color: rgba(#fff, 0.2);
+      font-size: 1.5em;
+      border-radius: 20px;
+      padding: 10px 20px 10px 20px;
+      outline: none;
+      border: none;
+      margin-bottom: 15px;
+    }
+
+  }
+}
