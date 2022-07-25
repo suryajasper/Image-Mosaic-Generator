@@ -1,0 +1,64 @@
+@import './vars.scss';
+
+.spotify-popup {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  background-color: $primary-2;
+  border-radius: 8px;
+  padding: 25px 0px 25px 0px;
+  
+  .playlists-container {
+    display: block;
+    max-height: min(75vh, 500px);
+    width: min(60vw, 400px);
+    overflow-y: scroll;
+
+    .playlist-view {
+      display: flex;
+      flex-direction: row;
+      align-items: center;
+      margin: 5px 0px 5px 0px;
+      padding: 8px 25px 8px 25px;
+      user-select: none;
+      cursor: pointer;
+
+      &:hover {
+        background-color: $primary-3;
+      }
+
+      > * {
+        margin: 0px 5px 0px 5px;
+      }
+
+      input.playlist-select {
+        margin-right: 20px;
+      }
+
+      img.playlist-cover {
+        width: 50px;
+      }
+
+      .playlist-title {
+        flex-grow: 1;
+      }
+    }
+
+  }
+
+  button.select-all {
+    cursor: pointer;
+    margin-top: 20px;
+    outline: none;
+    border: none;
+    background-color: $primary-3;
+    color: $light;
+    border-radius: 3px;
+    padding: 4px 8px 4px 8px;
+  }
+
+}

@@ -90,6 +90,7 @@ async function getUserPlaylists() {
         id: playlist.id,
         name: playlist.name,
         count: playlist.tracks.total,
+        img: playlist.images[0].url,
       };
     });
   

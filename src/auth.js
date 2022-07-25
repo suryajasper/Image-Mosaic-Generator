@@ -23,9 +23,6 @@ async function login(email, password) {
 
   let body = await res.json();
 
-  if (body.uid)
-    return body.uid;
-
   return body;
 
 }
@@ -38,9 +35,6 @@ async function signup(email, password) {
   });
 
   let body = await res.json();
-
-  if (body.uid)
-    return body.uid;
 
   return body;
 
