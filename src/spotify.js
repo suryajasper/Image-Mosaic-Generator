@@ -97,9 +97,9 @@ async function getUserPlaylists() {
   return playlists;
 }
 
-async function getAlbums() {
+async function getAlbums(playlists) {
 
-  const playlists = await getUserPlaylists();
+  playlists = playlists || await getUserPlaylists();
 
   let albums = {};
 
@@ -116,19 +116,10 @@ async function getAlbums() {
     console.log(`--END_PARSE playlist "${playlist.name}"`);
   }
 
-  const albumImgs = Object.values(albums);
-  
-  console.log('--START_AVERAGE_COLOR');
-
-  const fac = new FastAverageColor();
-  const averageColors = await Promise.all(albumImgs.map(fac.getColorAsync.bind(fac)));
-
-  console.log('--END_AVERAGE_COLOR')
-
-  const colors = albumImgs.map((img, i) => {
+  const colors = Object.keys(albums).map(name => {
     return {
-      img,
-      color: averageColors[i].value,
+      name,
+      img: albums[name],
     }
   });
 

@@ -1,12 +1,16 @@
+from ast import Bytes
 import threading
 
 from flask import Flask, request, send_file
 from flask_cors import CORS, cross_origin
 
-from os import path, listdir, remove, rename
+from os import path, listdir, remove, rename, mkdir
+from io import BytesIO
 from shutil import rmtree
 import json
 import base64
+import re
+import requests
 
 import cv2
 from PIL import Image
@@ -23,7 +27,16 @@ def to_base64(file_name):
     data = base64.b64encode(image_file.read())
   return data.decode('utf-8')
 
+def string_to_base64(str):
+  str_bytes = str.encode('ascii')
+  base64_bytes = base64.b64encode(str_bytes)
+  base64_message = base64_bytes.decode('ascii')
+  return base64_message
+
 def read_json(file_name):
+  if not path.exists(file_name):
+    return None
+  
   data = {}
   with open(file_name , "r") as json_file:
     data = json.load(json_file)
@@ -80,9 +93,32 @@ def upload():
   if request.method == 'POST':
     
     batch_size = request.form.get('batch_size')
+    upload_type = request.form.get('upload_type')
     id = request.form.get('id')
 
-    if batch_size:
+    if upload_type == 'url':
+      imgs = request.form.get('imgs')
+      imgs = json.loads(imgs)
+      
+      for img_data in imgs:
+        url = img_data['img']
+        name = re.sub(r'\W+', '', img_data['name'])
+
+        print(url, f'{name}.jpg')
+
+        res = requests.get(url)
+        img = Image.open(BytesIO(res.content))
+        img.save(path.join('temp', f'{name}.jpg'))
+
+      add_photos(id=id)
+
+      filelist = [ f for f in listdir('temp') if path.isfile(path.join('temp', f)) ]
+      for f in filelist:
+        remove(path.join('temp', f))
+      
+      return str(len(imgs))
+
+    else:
       fs = [request.files.get(str(i)) for i in range(int(batch_size))]
       
       print('FileStorage:', fs)
@@ -98,11 +134,6 @@ def upload():
         remove(path.join('temp', f))
 
       return batch_size
-    
-    else:
-      print('none')
-
-  return 'use post request'
 
 @app.route('/upload_mosaic_img', methods=['POST'])
 @cross_origin()
@@ -170,18 +201,12 @@ def send_images():
 
   if id and path.exists(path.join('out', id, 'imgs')):
     img_list = [ f for f in listdir(path.join('out', id, 'imgs')) if path.isfile(path.join('out', id, 'imgs', f)) ]
-    print('1')
     img_list = sorted(img_list, key = lambda f : int(f.split('.')[0]))
-    print('2')
     img_list = [ path.join('out', id, 'imgs', f) for f in img_list ]
-    print('3')
     img_list = list(map(to_base64, img_list))
-    print('4')
 
     color_file = path.join('out', id, 'data', f'{palette_type}.json')
     colors = read_json(color_file)
-
-    print('sending')
 
     return {
       "imgs": img_list,

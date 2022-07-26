@@ -135,6 +135,16 @@ function readFileAsync(file) {
   })
 }
 
+function isValidURL(string) {
+  var res = string.match(/(http(s)?:\/\/.)?(www\.)?[-a-zA-Z0-9@:%._\+~#=]{2,256}\.[a-z]{2,6}\b([-a-zA-Z0-9@:%_\+.~#?&//=]*)/g);
+  return (res !== null)
+};
+
+function base64ImgHeader(string) {
+  if (isValidURL(string)) return string;
+  return `data:image/jpg;base64,${string}`
+}
+
 const ParamParser = {
   encode(...params) {
     return btoa(params.join(','));
@@ -144,4 +154,4 @@ const ParamParser = {
   }
 }
 
-export { msToTime, arr2D, initArr, splitArray, numToPercent, randArr, randomStr, downloadURI, base64ToArrayBuffer, readFileAsync, ParamParser };
+export { msToTime, arr2D, initArr, splitArray, numToPercent, randArr, randomStr, downloadURI, base64ToArrayBuffer, readFileAsync, base64ImgHeader, ParamParser };

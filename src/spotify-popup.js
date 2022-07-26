@@ -4,9 +4,11 @@ import './css/spotify.scss';
 
 import { getPlaylist, getUserPlaylists, getAlbums } from './spotify';
 import { initArr } from './utils';
+import { getUid } from './auth';
 
 export default class SpotifyPopup {
   constructor(vnode) {
+    this.callback = vnode.attrs.callback;
     this.playlists = [];
     this.selected = [];
   }
@@ -29,8 +31,26 @@ export default class SpotifyPopup {
     return totalSelected === totalPlaylists;
   }
 
+  async uploadAlbums() {
+    const uid = await getUid();
+    const playlists = this.playlists.filter((_, i) => this.selected[i]);
+    const albums = await getAlbums(playlists);
+
+    const formData = new FormData();
+    formData.append('id', uid);
+    formData.append('upload_type', 'url');
+    formData.append('imgs', JSON.stringify(albums));
+
+    await fetch('http://suryajasper.com:8814/upload_images', {
+      method: 'POST',
+      body: formData,
+    });
+
+    this.callback('success');
+  }
+
   view(vnode) {
-    return m('div.spotify-popup', [
+    return m('div.spotify-popup', {style: { display: vnode.attrs.active ? "flex": "none" }}, [
       m('div.playlists-container', this.playlists.map((playlist, i) =>
         
         m('div.playlist-view', {
@@ -61,6 +81,10 @@ export default class SpotifyPopup {
       } }, 
         this.isAllSelected() ? 'Deselect All' : 'Select All'
       ),
+
+      m('button', { onclick: () => this.callback('cancelled') }, "Cancel"),
+
+      m('button', { onclick: this.uploadAlbums.bind(this) }, "Confirm"),
 
     ]);
   }

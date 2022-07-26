@@ -112,3 +112,7 @@ spotify_accounts/
 # cache
 __pycache__/
 webpackcache.js
+
+# confidential
+users.json
+credentials.json

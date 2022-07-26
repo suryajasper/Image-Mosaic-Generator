@@ -1,6 +1,7 @@
 
 import { getUid } from './auth';
 import { getAlbums } from './spotify';
+import { base64ImgHeader } from './utils';
 // import colors from '../spotify_accounts/out_algebrainer.json';
 // import colors from './data/avg.json';
 
@@ -23,7 +24,7 @@ async function loadColors(param_uid, use_spotify) {
   colors = body.colors.map((color, i) => {
     return {
       color,
-      img: `data:image/jpg;base64,${body.imgs[i]}`,
+      img: base64ImgHeader(body.imgs[i]),
       id: i,
     };
   });

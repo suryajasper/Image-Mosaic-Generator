@@ -35,7 +35,7 @@ def square_img(src_img):
 
   return square
 
-def add_photos(id='test', dims=72):
+def add_photos(id='test', dims=64):
   
   DATA_PATH = f'out/{id}/data/'
   OUT_PATH = f'out/{id}/imgs/'

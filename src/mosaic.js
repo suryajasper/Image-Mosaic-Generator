@@ -2,7 +2,7 @@ import m from 'mithril';
 import './css/mosaic.scss';
 import Jimp from 'jimp';
 import { colors, loadColors, closestColors, hexToRGB, rgbaObjToCss, rgbObjToArr, rgbArrToObj } from './color';
-import { initArr, randArr, downloadURI, base64ToArrayBuffer, randomStr, ParamParser } from './utils';
+import { initArr, randArr, downloadURI, base64ToArrayBuffer, randomStr, ParamParser, base64ImgHeader } from './utils';
 import { getUid } from './auth';
 import Main from '.';
 import IconButton from './icon-button';
@@ -72,7 +72,7 @@ export default class Mosaic {
 
       if (res.error) { return m.route.set('/'); }
 
-      this.image = `data:image/jpg;base64,${res.img}`;
+      this.image = base64ImgHeader(res.img);
 
       loadColors(id, vnode.attrs.mode === 'spotify').then(() => {
         m.redraw();

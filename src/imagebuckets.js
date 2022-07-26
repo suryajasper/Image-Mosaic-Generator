@@ -4,16 +4,18 @@ import { getAlbums } from './spotify';
 
 import ImageUpload from './imageupload';
 import IconButton from './icon-button';
+import SpotifyPopup from './spotify-popup';
 
 import './css/mosaic.scss';
 
-import { randomStr, ParamParser } from './utils';
+import { randomStr, ParamParser, base64ImgHeader } from './utils';
 
 export default class ImageBuckets {
 
   constructor(vnode) {
     this.images = [];
     this.hideUpload = true;
+    this.hideSpotify = true;
     this.mode = 'images';
 
     this.resetSelection();
@@ -38,7 +40,7 @@ export default class ImageBuckets {
         url: `http://suryajasper.com:8814/get_images?id=${uid}`
       })
         .then(res => {
-          this.images = res.imgs.map(img => `data:image/jpg;base64,${img}`);
+          this.images = res.imgs.map(base64ImgHeader);
           this.selection.selected = this.images.map(_ => false);
           m.redraw();
         })
@@ -52,6 +54,15 @@ export default class ImageBuckets {
 
   view(vnode) {
     return [
+
+      m(SpotifyPopup, {
+        active: !this.hideSpotify,
+        callback: status => {
+          if (status === 'success')
+            this.reloadImages();
+          this.hideSpotify = true;
+        }
+      }),
 
       m(ImageUpload, { 
         hidden: this.hideUpload, 
@@ -145,7 +156,7 @@ export default class ImageBuckets {
         m(IconButton, {
           icon: 'spotify',
           title: 'Spotify Mosaic', 
-          onclick: () => { this.mode = 'spotify'; document.querySelector('#mosaicBaseIn').click(); },
+          onclick: () => { this.hideSpotify = false; },
         }),
       ]),
 
