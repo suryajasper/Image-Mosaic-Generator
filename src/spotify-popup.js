@@ -45,6 +45,8 @@ export default class SpotifyPopup {
   }
 
   async uploadAlbums() {
+    this.loading = true;
+    
     const uid = await getUid();
     const playlists = this.playlists.filter((_, i) => this.selected[i]);
     const albums = await getAlbums(playlists);
@@ -54,7 +56,6 @@ export default class SpotifyPopup {
     formData.append('upload_type', 'url');
     formData.append('imgs', JSON.stringify(albums));
 
-    this.loading = true;
     m.redraw();
 
     await fetch('http://localhost:8814/upload_images', {
