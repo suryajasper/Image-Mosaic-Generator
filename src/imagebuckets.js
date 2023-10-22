@@ -1,6 +1,7 @@
 import m from 'mithril';
 import { getUid } from './auth';
 import { getAlbums } from './spotify';
+import { rgbToHsv } from './color';
 
 import ImageUpload from './imageupload';
 import IconButton from './icon-button';
@@ -40,7 +41,17 @@ export default class ImageBuckets {
         url: `http://localhost:8814/get_images?id=${uid}`
       })
         .then(res => {
-          this.images = res.imgs.map(base64ImgHeader);
+          let imgs = res.imgs.map(base64ImgHeader);
+          let hsvColors = res.colors.map(rgbToHsv);
+
+          if (imgs.length !== hsvColors.length)
+            this.images = imgs;
+          else {
+            let combined = hsvColors.map(({h, s, v}, i) => ({ key: h, img: imgs[i] }));
+            combined.sort((a, b) => a.key - b.key);
+            this.images = combined.map(item => item.img);
+          }
+
           this.selection.selected = this.images.map(_ => false);
           m.redraw();
         })

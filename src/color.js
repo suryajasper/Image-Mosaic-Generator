@@ -61,6 +61,42 @@ function hexToRGB(color) {
   return [r, g, b];
 }
 
+function rgbToHsv([r, g, b]) {
+  r = r / 255;
+  g = g / 255;
+  b = b / 255;
+
+  // Find the maximum and minimum values of r, g, b
+  let max = Math.max(r, g, b);
+  let min = Math.min(r, g, b);
+  let delta = max - min;
+
+  // Calculate the hue
+  let h;
+  if (delta === 0) {
+    h = 0;
+  } else if (max === r) {
+    h = 60 * (((g - b) / delta) % 6);
+  } else if (max === g) {
+    h = 60 * ((b - r) / delta + 2);
+  } else {
+    h = 60 * ((r - g) / delta + 4);
+  }
+
+  // Calculate the saturation
+  let s = max === 0 ? 0 : delta / max;
+
+  // Calculate the value
+  let v = max;
+
+  // Return the HSV values as an object
+  return {
+    h: Math.round(h),
+    s: Math.round(s * 100),
+    v: Math.round(v * 100)
+  };
+}
+
 function rgbaObjToCss(obj, changes) {
   const {r, g, b, a} = Object.assign(obj, changes);
   return `rgba(${r}, ${g}, ${b}, ${a})`;
@@ -77,4 +113,7 @@ function rgbArrToObj(arr) {
   return {r, g, b, a};
 }
 
-export { colors, loadColors, closestColors, hexToRGB, rgbaObjToCss, rgbObjToArr, rgbArrToObj }
+export { 
+  colors, loadColors, closestColors, 
+  hexToRGB, rgbToHsv, rgbaObjToCss, rgbObjToArr, rgbArrToObj 
+};
