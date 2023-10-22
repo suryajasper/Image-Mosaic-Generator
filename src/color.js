@@ -17,7 +17,7 @@ async function loadColors(param_uid, use_spotify) {
 
   let uid = param_uid || await getUid();
 
-  let res = await fetch(`http://suryajasper.com:8814/get_images?id=${uid}`);
+  let res = await fetch(`http://localhost:8814/get_images?id=${uid}`);
 
   let body = await res.json();
 

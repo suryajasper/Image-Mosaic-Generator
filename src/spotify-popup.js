@@ -11,15 +11,28 @@ export default class SpotifyPopup {
     this.callback = vnode.attrs.callback;
     this.playlists = [];
     this.selected = [];
+    this.loading = false;
   }
 
-  oninit(vnode) {
-    getUserPlaylists().then(playlists => {
+  refresh() {
+    if (!this.profileUrl) return;
+
+    window.localStorage.setItem('spotifyProfileUrl', this.profileUrl);
+
+    const userId = this.profileUrl.split('user/')[1].split('?')[0];
+
+    getUserPlaylists(userId).then(playlists => {
       this.playlists = playlists;
       this.selected = initArr([playlists.length], false);
 
       m.redraw();
     });
+  }
+
+  oninit(vnode) {
+    this.profileUrl = window.localStorage.getItem('spotifyProfileUrl') || '';
+
+    this.refresh();
   }
 
   isAllSelected() {
@@ -41,29 +54,55 @@ export default class SpotifyPopup {
     formData.append('upload_type', 'url');
     formData.append('imgs', JSON.stringify(albums));
 
-    await fetch('http://suryajasper.com:8814/upload_images', {
+    this.loading = true;
+    m.redraw();
+
+    await fetch('http://localhost:8814/upload_images', {
       method: 'POST',
       body: formData,
     });
+
+    console.log('done');
+
+    this.loading = false;
 
     this.callback('success');
   }
 
   view(vnode) {
-    return m('div.spotify-popup', {style: { display: vnode.attrs.active ? "flex": "none" }}, [
+    return m('div.spotify-popup', {
+      style: { display: vnode.attrs.active ? "flex": "none" },
+    }, [
+      m('div.spotify-profile-input-section.flex-row', [
+        m('input', {
+          type: 'text',
+          placeholder: 'Spotify profile link',
+
+          oninput: e => {
+            this.profileUrl = e.target.value;
+          },
+          onkeypress: e => {
+            if (e.key === 'Enter')
+              this.refresh();
+          }
+        }),
+        m('button', { onclick: this.refresh.bind(this), }, 'Load')
+      ]),
+
       m('div.playlists-container', this.playlists.map((playlist, i) =>
         
-        m('div.playlist-view', {
+        m('div', {
+          className: `playlist-view ${this.selected[i] ? 'selected' : ''}`,
           onclick: e => {
             this.selected[i] = !this.selected[i];
 
             e.stopPropagation();
           }
         }, [
-          m('input.playlist-select', {
+          /*m('input.playlist-select', {
             type: "checkbox",
             checked: this.selected[i],
-          }),
+          }),*/
 
           m('img.playlist-cover', {src: playlist.img}),
 
@@ -74,17 +113,39 @@ export default class SpotifyPopup {
 
       )),
 
-      m('button.select-all', { onclick: e => {
-        let bool = !this.isAllSelected();
-        for (let i = 0; i < this.selected.length; i++)
-          this.selected[i] = bool;
-      } }, 
-        this.isAllSelected() ? 'Deselect All' : 'Select All'
-      ),
+      m('div.flex-row', [
 
-      m('button', { onclick: () => this.callback('cancelled') }, "Cancel"),
+        m('button.select-all', { 
+          onclick: e => {
+            let bool = !this.isAllSelected();
+            for (let i = 0; i < this.selected.length; i++)
+              this.selected[i] = bool;
+          },
+          disabled: this.selected.length <= 1,
+        }, 
+          this.isAllSelected() ? 'Deselect All' : 'Select All'
+        ),
+  
+        m('button', { 
+          disabled: (this.selected.length === 0) || !this.selected.reduce((a, b) => a || b),
+          onclick: this.uploadAlbums.bind(this),
+        }, "Confirm"),
+        
+        m('button', {
+          onclick: () => this.callback('cancelled'),
+        }, "Cancel"),
+        
+      ]),
 
-      m('button', { onclick: this.uploadAlbums.bind(this) }, "Confirm"),
+      m('div.mosaic-overlay', {
+        className: this.loading ? 'loading' : '',
+        style: {
+          display: this.loading ? 'flex' : 'none',
+        },
+      }, [
+        m('div.loader'),
+      ]),
+
 
     ]);
   }

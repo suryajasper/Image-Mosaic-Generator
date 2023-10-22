@@ -48,6 +48,15 @@ def files_in_dir(dir_name, include_path=True):
     files = [ path.join(dir_name, f) for f in files ]
   return files
 
+def string_to_filename(string):
+  # Remove invalid characters
+  filename = re.sub(r'[^\w\s.-]', '', string)
+
+  # Replace whitespaces with underscores
+  filename = re.sub(r'\s+', '_', filename)
+
+  return filename
+
 app = Flask(__name__)
 
 @app.route('/fuck', methods=['GET'])
@@ -102,7 +111,7 @@ def upload():
       
       for img_data in imgs:
         url = img_data['img']
-        name = re.sub(r'\W+', '', img_data['name'])
+        name = string_to_filename( img_data['name'] )
 
         print(url, f'{name}.jpg')
 

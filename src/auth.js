@@ -16,7 +16,7 @@ async function getUid() {
 
 async function login(email, password) {
 
-  const res = await fetch('http://suryajasper.com:8814/login_user', {
+  const res = await fetch('http://localhost:8814/login_user', {
     method: 'POST',
     body: JSON.stringify({ email, password }),
   });
@@ -29,7 +29,7 @@ async function login(email, password) {
 
 async function signup(email, password) {
 
-  const res = await fetch('http://suryajasper.com:8814/create_user', {
+  const res = await fetch('http://localhost:8814/create_user', {
     method: 'POST',
     body: JSON.stringify({ email, password }),
   });

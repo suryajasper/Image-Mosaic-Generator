@@ -37,7 +37,7 @@ export default class ImageBuckets {
       
       m.request({
         method: 'GET',
-        url: `http://suryajasper.com:8814/get_images?id=${uid}`
+        url: `http://localhost:8814/get_images?id=${uid}`
       })
         .then(res => {
           this.images = res.imgs.map(base64ImgHeader);
@@ -84,7 +84,7 @@ export default class ImageBuckets {
             formdata.append('uid', uid);
   
             let xhr = new XMLHttpRequest();
-            xhr.open("POST", "http://suryajasper.com:8814/upload_mosaic_img", true);
+            xhr.open("POST", "http://localhost:8814/upload_mosaic_img", true);
             xhr.onload = () => {
 
               const fr = new FileReader();
@@ -131,7 +131,7 @@ export default class ImageBuckets {
 
             await m.request({
               method: 'POST',
-              url: `http://suryajasper.com:8814/remove_imgs`,
+              url: `http://localhost:8814/remove_imgs`,
               body: {
                 id: uid,
                 selected: selectedImgs,
@@ -149,14 +149,14 @@ export default class ImageBuckets {
           onclick: () => { document.querySelector('#csvIn').click() },
         }),
         m(IconButton, {
+          icon: 'spotify',
+          title: 'Load Album Covers from Spotify', 
+          onclick: () => { this.hideSpotify = false; },
+        }),
+        m(IconButton, {
           icon: 'build',
           title: 'Generate Mosaic', 
           onclick: () => { this.mode = 'images'; document.querySelector('#mosaicBaseIn').click(); },
-        }),
-        m(IconButton, {
-          icon: 'spotify',
-          title: 'Spotify Mosaic', 
-          onclick: () => { this.hideSpotify = false; },
         }),
       ]),
 

@@ -8,7 +8,7 @@ import Main from '.';
 import IconButton from './icon-button';
 
 function RangeGroup(vnode) {
-  
+
   const {title, initialVal, min, max, step} = vnode.attrs;
   let newVal = initialVal;
 
@@ -18,8 +18,8 @@ function RangeGroup(vnode) {
         m('p.range-title', title),
         m('input', {
           type: 'range',
-          min, max, step, 
-          value: newVal, 
+          min, max, step,
+          value: newVal,
           disabled: vnode.attrs.disabled,
 
           oninput: e => {
@@ -57,7 +57,7 @@ export default class Mosaic {
 
     this.mode = vnode.attrs.mode;
   }
-  
+
   oninit(vnode) {
 
     const {id} = vnode.attrs;
@@ -66,7 +66,7 @@ export default class Mosaic {
       this.admin = uid === id;
     })
 
-    m.request(`http://suryajasper.com:8814/get_mosaic_img?uid=${id}`, {
+    m.request(`http://localhost:8814/get_mosaic_img?uid=${id}`, {
       method: 'GET',
     }).then((res) => {
 
@@ -84,7 +84,7 @@ export default class Mosaic {
     window.onresize = e => {
       this.getGridSize();
       m.redraw();
-    } 
+    }
 
   }
 
@@ -94,13 +94,13 @@ export default class Mosaic {
 
     const uid = await getUid();
     const tintFactor = this.tintLayerAlpha;
-    const idMap = this.bitmap.map(row => row.map(el => el.id)); 
+    const idMap = this.bitmap.map(row => row.map(el => el.id));
     const tintMap = this.bitmap.map(row => row.map(el => rgbObjToArr(el.color)));
 
     const data = { uid, idMap, tintFactor, tintMap };
-    
+
     const res = await m.request({
-      url: 'http://suryajasper.com:8814/generate_mosaic',
+      url: 'http://localhost:8814/generate_mosaic',
       method: 'POST',
       body: data,
     });
@@ -109,13 +109,13 @@ export default class Mosaic {
 
     const blob = new Blob([arrayBuffer], {type: 'image/jpg'});
     const blobUrl = URL.createObjectURL(blob);
-    
+
     const a = document.createElement('a');
     a.setAttribute('download', 'mosaic.jpg');
     a.href = blobUrl;
     document.body.appendChild(a);
     a.click();
-    
+
     this.loading = false;
 
   }
@@ -137,14 +137,14 @@ export default class Mosaic {
         let resized = img.resize(new_width, new_height, Jimp.RESIZE_NEAREST_NEIGHBOR);
 
         this.source = initArr([resized.bitmap.height, resized.bitmap.width])
-          .map((row, r) => row.map((_, c) => 
-            Jimp.intToRGBA( 
+          .map((row, r) => row.map((_, c) =>
+            Jimp.intToRGBA(
               resized.getPixelColor(c, r)
             )
           ));
 
         this.bitmap = this.source
-          .map(row => 
+          .map(row =>
             row.map(color => {
 
               const id = randArr(
@@ -171,18 +171,18 @@ export default class Mosaic {
   }
 
   useAll() {
-    
+
     let frequency = initArr([colors.length], 0);
 
     this.bitmap
-      .forEach(row => 
-        row.forEach(({id}) => { 
+      .forEach(row =>
+        row.forEach(({id}) => {
           frequency[id]++;
         })
       );
 
     let imgColors = this.source
-      .map((row, y) => 
+      .map((row, y) =>
         row.map((color, x) => {
           return {
             color: rgbObjToArr(color),
@@ -205,14 +205,14 @@ export default class Mosaic {
 
         let imgInPos = this.bitmap[y][x].id;
 
-        if (frequency[i] < frequency[imgInPos] && frequency[imgInPos] > 1) {          
+        if (frequency[i] < frequency[imgInPos] && frequency[imgInPos] > 1) {
           this.bitmap[y][x].img = colors[i].img;
           this.bitmap[y][x].id = i;
 
           frequency[imgInPos]--;
           frequency[i]++;
         }
-        
+
       }
 
     }
@@ -263,22 +263,22 @@ export default class Mosaic {
       /*
       m('div.tool-group', [
         m(IconButton, {
-          icon: 'exit', 
-          title: 'Back', 
+          icon: 'exit',
+          title: 'Back',
           onclick: () => {
             this.resetSelection();
           }
         }),
         m(IconButton, {
-          icon: 'export', 
-          title: 'Export', 
+          icon: 'export',
+          title: 'Export',
           onclick: () => {
             this.resetSelection();
           }
         }),
         m(IconButton, {
-          icon: 'gear', 
-          title: 'Clear Selection', 
+          icon: 'gear',
+          title: 'Clear Selection',
           onclick: () => {
             this.resetSelection();
           }
@@ -287,12 +287,12 @@ export default class Mosaic {
       */
 
       m('div', {
-        class: 'mosaic-grid', 
+        class: 'mosaic-grid',
         style: Object.assign({
           'grid-template-columns': `repeat(${this.bitmap[0].length}, 1fr)`,
         }, this.getGridSize())
-      }, 
-        this.bitmap.map(row => 
+      },
+        this.bitmap.map(row =>
           row.map(pixel => {
 
             return m('div', {
@@ -318,7 +318,7 @@ export default class Mosaic {
 
       m('div.mosaic-sidebar', [
 
-        this.admin ? (m('div.params', 
+        this.admin ? (m('div.params',
           [
             {title: 'Resolution', min: 30, max: 140, step: 1, initialVal: this.resolution, disabled: this.loading, update: val => this.updateParam('resolution', val, true)},
             {title: 'Noise', min: 1, max: 10, step: 1, initialVal: this.balance, disabled: this.loading, update: val => this.updateParam('balance', val, true)},
@@ -334,7 +334,7 @@ export default class Mosaic {
             ]),
           ])
         )) : '',
-        
+
         m('div.img-grid', {
           onmouseleave: e => {
             this.selectedImg = null;

@@ -35,7 +35,7 @@ def square_img(src_img):
 
   return square
 
-def add_photos(id='test', dims=64):
+def add_photos(id='test', dims=64                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 ):
   
   DATA_PATH = f'out/{id}/data/'
   OUT_PATH = f'out/{id}/imgs/'
@@ -77,7 +77,7 @@ def add_photos(id='test', dims=64):
 
     print(f'-- {index} {PHOTO_PATH + pic}')
 
-    src_img = cv2.imread(PHOTO_PATH + pic) #('G:\Mom\Photos\\3FC9D522-8B81-4457-9FB4-39642B732363-827-00000074305BFC75.jpg')
+    src_img = cv2.imread(PHOTO_PATH + pic) 
 
     square = square_img(src_img)  
     resized = cv2.resize(square, (dims, dims))

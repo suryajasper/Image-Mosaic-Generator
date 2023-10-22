@@ -24,8 +24,6 @@ async function getToken() {
 
 }
 
-const userId = "algebrainer";
-
 async function getPlaylist(id, offset) {
 
   const TOKEN = await getToken();
@@ -65,7 +63,7 @@ async function getPlaylist(id, offset) {
 
 }
 
-async function getUserPlaylists() {
+async function getUserPlaylists(userId) {
 
   const TOKEN = await getToken();
 
@@ -83,7 +81,8 @@ async function getUserPlaylists() {
   
   const playlists = data.items
     .filter(playlist => 
-      playlist.owner.id === userId
+      //playlist.owner.id === userId &&
+      playlist.images.length > 0
     )
     .map(playlist => {
       return {
@@ -95,6 +94,17 @@ async function getUserPlaylists() {
     });
   
   return playlists;
+}
+
+
+function makeid(length) {
+  var result           = '';
+  var characters       = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  var charactersLength = characters.length;
+  for ( var i = 0; i < length; i++ ) {
+      result += characters.charAt(Math.floor(Math.random() * charactersLength));
+  }
+  return result;
 }
 
 async function getAlbums(playlists) {
@@ -118,7 +128,7 @@ async function getAlbums(playlists) {
 
   const colors = Object.keys(albums).map(name => {
     return {
-      name,
+      name: name.replace(/[\u{0080}-\u{10FFFF}]/gu, makeid(1)) + 'sa', // replace non ascii with ascii
       img: albums[name],
     }
   });

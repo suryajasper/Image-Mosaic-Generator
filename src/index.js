@@ -34,7 +34,7 @@ export default class Main {
       
       m.request({
         method: 'GET',
-        url: `http://suryajasper.com:8814/get_img_count?id=${uid}`
+        url: `http://localhost:8814/get_img_count?id=${uid}`
       })
         .then(count => {
           if (count > 0)
