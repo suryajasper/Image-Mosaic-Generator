@@ -1,5 +1,6 @@
 """Loopback-only photo library. Originals are read, never overwritten."""
 from pathlib import Path
+from contextlib import nullcontext
 import hashlib
 import io
 import os
@@ -47,6 +48,9 @@ with db() as conn:
         if name not in columns:
             conn.execute(f'ALTER TABLE photos ADD COLUMN {name} {declaration}')
     conn.execute('CREATE TABLE IF NOT EXISTS portraits (id TEXT PRIMARY KEY, path TEXT)')
+    conn.execute('CREATE TABLE IF NOT EXISTS heic_sources (path TEXT PRIMARY KEY, identity TEXT NOT NULL, signature TEXT NOT NULL, digest TEXT NOT NULL)')
+    conn.execute('CREATE TABLE IF NOT EXISTS heic_conversions (digest TEXT PRIMARY KEY, filename TEXT NOT NULL)')
+
     conn.execute("CREATE TABLE IF NOT EXISTS groups (id TEXT PRIMARY KEY, name TEXT NOT NULL, path TEXT UNIQUE NOT NULL, status TEXT DEFAULT 'available', enabled INTEGER DEFAULT 1)")
     conn.execute('CREATE TABLE IF NOT EXISTS group_photos (group_id TEXT, photo_id TEXT, present INTEGER DEFAULT 1, PRIMARY KEY(group_id, photo_id))')
     if not conn.execute('SELECT 1 FROM groups LIMIT 1').fetchone():
@@ -162,23 +166,69 @@ def identity(path):
     return hashlib.sha256(f'{stat.st_dev}:{stat.st_ino}'.encode()).hexdigest()[:24]
 
 
-def converted_path(path):
-    return CACHE / (hashlib.sha256((identity(path) + signature(path)).encode()).hexdigest() + '.jpg')
+def file_digest(path):
+    digest = hashlib.sha256()
+    with path.open('rb') as source:
+        for chunk in iter(lambda: source.read(1024 * 1024), b''):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def converted_path(path, connection=None):
+    """Resolve by content, recovering old inode-based JPEGs without decoding HEIC."""
+    path = Path(path).resolve()
+    file_id, stamp = identity(path), signature(path)
+    with lock, (db() if connection is None else nullcontext(connection)) as conn:
+        source = conn.execute('SELECT * FROM heic_sources WHERE path=?', (str(path),)).fetchone()
+        unchanged = source and source['identity'] == file_id and source['signature'] == stamp
+        digest = source['digest'] if unchanged else file_digest(path)
+        if not unchanged and (identity(path) != file_id or signature(path) != stamp):
+            raise ValueError('A HEIC image changed while reading it. Scan the folder again.')
+        cached = conn.execute('SELECT filename FROM heic_conversions WHERE digest=?', (digest,)).fetchone()
+        destination = CACHE / ('heic-' + digest + '.jpg')
+        if cached and Path(cached[0]).name == cached[0] and (CACHE / cached[0]).is_file():
+            destination = CACHE / cached[0]
+        elif not source:
+            # Older versions recorded the original file identity in photos, but
+            # looked up conversions with a newly computed identity after restart.
+            # Trust the legacy JPEG only on this first migration, with matching
+            # recorded size/mtime. Subsequent invalidation compares content hashes.
+            saved = conn.execute('SELECT id FROM photos WHERE path=? AND signature=?', (str(path), stamp)).fetchone()
+            candidates = [saved[0]] if saved else []
+            candidates.append(file_id)
+            for candidate in candidates:
+                legacy = CACHE / (hashlib.sha256((candidate + stamp).encode()).hexdigest() + '.jpg')
+                if legacy.is_file():
+                    destination = legacy
+                    conn.execute('INSERT OR REPLACE INTO heic_conversions VALUES (?,?)', (digest, legacy.name))
+                    break
+        if not unchanged:
+            conn.execute('INSERT OR REPLACE INTO heic_sources VALUES (?,?,?,?)', (str(path), file_id, stamp, digest))
+        return destination
 
 
 def conversion_pending(paths):
-    return [str(p) for p in paths if p.suffix.lower() in HEIC and not converted_path(p).exists()]
+    with lock, db() as conn:
+        return [str(p) for p in paths if p.suffix.lower() in HEIC and not converted_path(p, conn).is_file()]
 
 
-def convert(path):
-    destination = converted_path(path)
-    if not destination.exists():
-        with Image.open(path) as source:
-            image = ImageOps.exif_transpose(source).convert('RGB')
-            temporary = destination.with_suffix('.tmp')
-            image.save(temporary, 'JPEG', quality=95)
-            temporary.replace(destination)
-    return destination
+def convert(path, connection=None):
+    with lock, (db() if connection is None else nullcontext(connection)) as conn:
+        destination = converted_path(path, conn)
+        if not destination.is_file():
+            source_record = conn.execute('SELECT identity,signature,digest FROM heic_sources WHERE path=?', (str(Path(path).resolve()),)).fetchone()
+            with Image.open(path) as source:
+                image = ImageOps.exif_transpose(source).convert('RGB')
+                temporary = destination.with_suffix('.tmp')
+                try:
+                    image.save(temporary, 'JPEG', quality=95)
+                    if identity(path) != source_record['identity'] or signature(path) != source_record['signature']:
+                        raise ValueError('A HEIC image changed during conversion. Try scanning again.')
+                    temporary.replace(destination)
+                finally:
+                    temporary.unlink(missing_ok=True)
+            conn.execute('INSERT OR REPLACE INTO heic_conversions VALUES (?,?)', (source_record['digest'], destination.name))
+        return destination
 
 
 @app.post('/api/import')
@@ -212,7 +262,7 @@ def import_folder():
                 if existing:
                     photo_id = existing['id']
                 if not existing or existing['signature'] != stamp:
-                    readable = convert(path) if path.suffix.lower() in HEIC else path
+                    readable = convert(path, conn) if path.suffix.lower() in HEIC else path
                     with Image.open(readable) as img:
                         img.verify()
                 conn.execute("INSERT INTO photos (id,path,signature,active) VALUES (?,?,?,1) ON CONFLICT(id) DO UPDATE SET path=excluded.path, active=1, revision=photos.revision + (photos.signature != excluded.signature), signature=excluded.signature", (photo_id, str(path), stamp))
@@ -252,7 +302,7 @@ def portrait_options():
     with lock, db() as conn:
         for path in paths:
             try:
-                readable = convert(path) if path.suffix.lower() in HEIC else path
+                readable = convert(path, conn) if path.suffix.lower() in HEIC else path
                 with Image.open(readable) as image:
                     image.verify()
                 photo_id = identity(path)

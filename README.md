@@ -60,7 +60,7 @@ The first scan/generation of a large collection is slower because originals must
 
 ## Local storage and backups
 
-`.mosaic/library.sqlite` stores local paths, photo groups, selections, normalized crop coordinates, rotations, portrait pieces, and their settings. `.mosaic/pieces` stores selection masks and immutable render assets. `.mosaic/cache` contains converted JPEGs and square thumbnails. Both are ignored by Git. Keep `.mosaic` alongside the original photo directories to preserve work; deleting the database resets edits. Set `MOSAIC_DATA_DIR` to an absolute directory to keep this data elsewhere. Changing that location starts a separate library.
+`.mosaic/library.sqlite` stores local paths, photo groups, selections, normalized crop coordinates, rotations, portrait pieces, and their settings. `.mosaic/pieces` stores selection masks and immutable render assets. `.mosaic/cache` contains converted JPEGs and square thumbnails. HEIC conversions are indexed by a SHA-256 fingerprint of the original file contents, so the same image can reuse its conversion after a restart, copy, or filesystem-identifier change. Existing conversions from older versions are recovered using saved photo identity and matching file size/mtime; this migration does not reconvert originals. Both are ignored by Git. Keep `.mosaic` alongside the original photo directories to preserve work; deleting the database resets edits. Set `MOSAIC_DATA_DIR` to an absolute directory to keep this data elsewhere. Changing that location starts a separate library.
 
 ## Checks
 

@@ -17,7 +17,7 @@ class LocalLibraryTests(unittest.TestCase):
         self.folder = Path(self.tmp.name)
         self.client = server.app.test_client()
         with server.db() as conn:
-            for table in ('pieces','projects','group_photos','groups'):
+            for table in ('pieces','projects','group_photos','groups','heic_sources','heic_conversions'):
                 conn.execute('DELETE FROM ' + table)
             conn.execute('DELETE FROM photos')
             conn.execute('DELETE FROM settings')
@@ -301,6 +301,76 @@ class LocalLibraryTests(unittest.TestCase):
         self.assertNotIn('needsConversion',self.scan().json)
         heic=renamed
         self.assertEqual(self.client.post('/api/target',json={'path':str(heic)}).status_code,200)
+
+    def test_heic_cache_recovers_legacy_entries_after_filesystem_identity_change(self):
+        from pillow_heif import from_pillow
+        from unittest.mock import patch
+        import hashlib
+        heic=(self.folder/'memory.HEIC').resolve()
+        from_pillow(Image.new('RGB',(90,60),'orange')).save(heic)
+        old_id,stamp=server.identity(heic),server.signature(heic)
+        legacy=server.CACHE/(hashlib.sha256((old_id+stamp).encode()).hexdigest()+'.jpg')
+        Image.new('RGB',(90,60),'orange').save(legacy)
+        with server.db() as conn:
+            conn.execute('INSERT INTO photos(id,path,signature,size,rotation) VALUES (?,?,?,?,?)',(old_id,str(heic),stamp,.4,90))
+        original_identity,original_open=server.identity,server.Image.open
+        def without_heic_decode(path,*args,**kwargs):
+            if isinstance(path,(str,Path)) and Path(path).suffix.lower() in server.HEIC:
+                raise AssertionError('Cached HEIC must not be decoded again')
+            return original_open(path,*args,**kwargs)
+        with patch.object(server,'identity',side_effect=lambda p:'f'*24 if Path(p)==heic else original_identity(p)), patch.object(server.Image,'open',side_effect=without_heic_decode):
+            result=self.scan()
+            self.assertEqual(result.status_code,200)
+            self.assertNotIn('needsConversion',result.json)
+            self.assertEqual(server.converted_path(heic),legacy)
+            self.assertEqual(server.photo(old_id)['size'],.4)
+            self.assertEqual(server.photo(old_id)['rotation'],90)
+        self.assertNotIn('needsConversion',self.scan().json)
+        self.assertEqual(server.converted_path(heic),legacy)
+
+    def test_heic_content_cache_reuses_copies_and_invalidates_changed_bytes(self):
+        from pillow_heif import from_pillow
+        from unittest.mock import patch
+        import shutil
+        heic=(self.folder/'memory.HEIC').resolve()
+        from_pillow(Image.new('RGB',(90,60),'orange')).save(heic)
+        self.client.post('/api/convert',json={'paths':[str(heic)]})
+        self.scan()
+        cached=server.converted_path(heic)
+        copied=(self.folder/'copied.HEIC').resolve();shutil.copy2(heic,copied)
+        original_open=server.Image.open
+        def without_heic_decode(path,*args,**kwargs):
+            if isinstance(path,(str,Path)) and Path(path).suffix.lower() in server.HEIC:
+                raise AssertionError('Identical copied images must reuse the cached JPEG')
+            return original_open(path,*args,**kwargs)
+        with patch.object(server.Image,'open',side_effect=without_heic_decode):
+            self.assertNotIn('needsConversion',self.scan().json)
+            self.assertEqual(server.converted_path(copied),cached)
+        stamp=heic.stat()
+        os.utime(heic,ns=(stamp.st_atime_ns,stamp.st_mtime_ns+1))
+        self.assertNotIn('needsConversion',self.scan().json)
+        self.assertEqual(server.converted_path(heic),cached)
+        # A replacement at the same path, even with identical size/mtime, cannot
+        # borrow the previous contents' JPEG after the content index is present.
+        original_stat=heic.stat()
+        replacement=self.folder/'replacement.HEIC'
+        replacement.write_bytes(bytes([heic.read_bytes()[0]^1])+heic.read_bytes()[1:])
+        os.utime(replacement,ns=(original_stat.st_atime_ns,original_stat.st_mtime_ns))
+        replacement.replace(heic)
+        result=self.scan().json
+        self.assertEqual(result['needsConversion'],[str(heic)])
+        self.assertFalse(server.converted_path(heic).exists())
+        self.assertEqual(server.converted_path(copied),cached)
+
+    def test_heic_conversion_during_import_uses_the_existing_transaction(self):
+        from pillow_heif import from_pillow
+        heic=(self.folder/'memory.HEIC').resolve()
+        from_pillow(Image.new('RGB',(90,60),'orange')).save(heic)
+        result=self.scan(convert=True)
+        self.assertEqual(result.status_code,200)
+        self.assertEqual(result.json['imported'],3)
+        self.assertNotIn('needsConversion',self.scan().json)
+        self.assertEqual(self.client.post('/api/portraits',json={'path':str(self.folder),'convert':True}).status_code,200)
 
     def test_foreground_mask_excludes_background_and_is_cached(self):
         from unittest.mock import patch
