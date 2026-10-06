@@ -18,9 +18,14 @@ import {
   Hand,
 } from "lucide-react";
 import { api } from "./api";
+import {
+  PieceSettings,
+  type PieceTuning,
+  type StudioDefaults,
+} from "./PieceSettings";
 
 type Group = { id: string; name: string; status: string };
-type Piece = {
+type Piece = PieceTuning & {
   id: string;
   name: string;
   mode: "mosaic" | "original";
@@ -39,6 +44,9 @@ type Project = {
   pieces: Piece[];
   remainder_mode: "mosaic" | "original";
   remainder_groups: string[];
+  remainder_columns: number | null;
+  remainder_variety: number | null;
+  remainder_blend: number | null;
   selectionReady: boolean;
   selectionAvailable: boolean;
 };
@@ -74,6 +82,7 @@ export function PieceEditor({
   onChange,
   onChoosePortrait,
   onDirtyChange,
+  defaults,
 }: {
   groups: Group[];
   target: string | null;
@@ -81,6 +90,7 @@ export function PieceEditor({
   onChange: () => Promise<void>;
   onChoosePortrait: () => void;
   onDirtyChange: (dirty: boolean) => void;
+  defaults: StudioDefaults;
 }) {
   const [project, setProject] = useState<Project | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -1063,6 +1073,22 @@ export function PieceEditor({
                 groupPicker(piece.groups, (ids) =>
                   run(() => updatePiece(piece, { groups: ids })),
                 )}
+              {piece.mode === "mosaic" && (
+                <PieceSettings
+                  name={piece.name}
+                  settings={piece}
+                  defaults={defaults}
+                  disabled={busy || project.stale}
+                  onSave={async (settings) => {
+                    await api("/pieces/" + piece.id, "PATCH", {
+                      projectId: project.id,
+                      ...settings,
+                    });
+                    await refresh();
+                    await onChange();
+                  }}
+                />
+              )}
               <button
                 className="text-button mt-2"
                 onClick={() => switchPiece(piece.id)}
@@ -1105,6 +1131,26 @@ export function PieceEditor({
                   await onChange();
                 }),
               )}
+            {project.remainder_mode === "mosaic" && (
+              <PieceSettings
+                name="Everything else"
+                settings={{
+                  columns: project.remainder_columns,
+                  variety: project.remainder_variety,
+                  blend: project.remainder_blend,
+                }}
+                defaults={defaults}
+                disabled={busy || project.stale}
+                onSave={async (settings) => {
+                  await api("/project/options", "POST", {
+                    projectId: project.id,
+                    ...settings,
+                  });
+                  await refresh();
+                  await onChange();
+                }}
+              />
+            )}
           </article>
           <button
             className="primary w-full justify-center mt-4"

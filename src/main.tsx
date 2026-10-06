@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import "./style.css";
 import { api } from "./api";
+import { PieceSettings, type TuningProject } from "./PieceSettings";
 import { PieceEditor } from "./PieceEditor";
 import { cropDragUpdate } from "./crop-drag";
 import { attachCanvasGestures } from "./canvas-gestures";
@@ -66,6 +67,7 @@ type Scan = {
 type Mosaic = {
   columns: number;
   rows: number;
+  aspectRatio?: number;
   ids: string[];
   revisions: number[];
   tiles: number[];
@@ -78,6 +80,10 @@ type Mosaic = {
     id: string;
     name: string;
     maskUrl: string;
+    columns: number;
+    rows: number;
+    variety: number;
+    blend: number;
     tiles: number[];
     colors: number[][];
     counts: number[];
@@ -393,6 +399,9 @@ function App() {
   const [page, setPage] = useState<"photos" | "pieces" | "mosaic">("photos");
   const [groupFilter, setGroupFilter] = useState("all");
   const [groupName, setGroupName] = useState("");
+  const [tuningProject, setTuningProject] = useState<TuningProject | null>(
+    null,
+  );
   const [hasPieces, setHasPieces] = useState(false);
   const [pieceDirty, setPieceDirty] = useState(false);
   const [pendingPage, setPendingPage] = useState<
@@ -510,9 +519,13 @@ function App() {
     if (lib.folder) setFolder(lib.folder);
     setTarget(lib.target || "");
     if (lib.target) {
-      const project = await api<{ enabled: number }>("/project");
+      const project = await api<TuningProject>("/project");
+      setTuningProject(project);
       setHasPieces(!!project.enabled);
-    } else setHasPieces(false);
+    } else {
+      setHasPieces(false);
+      setTuningProject(null);
+    }
     if (lib.target)
       setPortraitFolder(
         (previous) =>
@@ -628,6 +641,7 @@ function App() {
         const result = await api<Mosaic>("/mosaic", "POST", {
           columns,
           variety,
+          blend: tint,
           seed,
         });
         await Promise.all(
@@ -674,26 +688,36 @@ function App() {
       clearTimeout(timer);
       requestVersion.current++;
     };
-  }, [page, library, columns, variety, seed, hasPieces]);
+  }, [
+    page,
+    library,
+    columns,
+    variety,
+    seed,
+    hasPieces,
+    hasPieces ? tint : null,
+  ]);
   function draw(c: HTMLCanvasElement, m: Mosaic, width: number) {
-    const tile = width / m.columns;
     c.width = width;
-    c.height = Math.round(m.rows * tile);
+    c.height = Math.round(width * (m.aspectRatio ?? m.rows / m.columns));
     const ctx = c.getContext("2d")!;
     const drawTiles = (
       context: CanvasRenderingContext2D,
       tiles: number[],
       colors: number[][],
+      across = m.columns,
+      blend = tint,
     ) => {
+      const cell = width / across;
       tiles.forEach((index, i) => {
         if (index < 0) return;
-        const x = (i % m.columns) * tile,
-          y = Math.floor(i / m.columns) * tile,
+        const x = (i % across) * cell,
+          y = Math.floor(i / across) * cell,
           img = images.current.get(m.ids[index] + ":" + m.revisions[index]);
-        if (img) context.drawImage(img, x, y, tile + 0.5, tile + 0.5);
-        if (tint > 0) {
-          context.fillStyle = `rgba(${colors[i].join(",")},${tint})`;
-          context.fillRect(x, y, tile + 0.5, tile + 0.5);
+        if (img) context.drawImage(img, x, y, cell + 0.5, cell + 0.5);
+        if (blend > 0) {
+          context.fillStyle = `rgba(${colors[i].join(",")},${blend})`;
+          context.fillRect(x, y, cell + 0.5, cell + 0.5);
         }
       });
     };
@@ -708,7 +732,13 @@ function App() {
       const layerContext = layerCanvas.getContext("2d")!;
       for (const layer of m.layers) {
         layerContext.clearRect(0, 0, c.width, c.height);
-        drawTiles(layerContext, layer.tiles, layer.colors);
+        drawTiles(
+          layerContext,
+          layer.tiles,
+          layer.colors,
+          layer.columns,
+          layer.blend,
+        );
         const mask = images.current.get(layer.maskUrl);
         if (!mask)
           throw new Error("A portrait-piece mask could not be loaded.");
@@ -737,8 +767,18 @@ function App() {
     }
   }
   useEffect(() => {
-    if (mosaic && canvas.current)
-      draw(canvas.current, mosaic, Math.min(2400, mosaic.columns * 32));
+    if (mosaic && canvas.current) {
+      const across = Math.max(
+        mosaic.columns,
+        ...(mosaic.layers || []).map((layer) => layer.columns),
+      );
+      const aspect = mosaic.aspectRatio ?? mosaic.rows / mosaic.columns;
+      const width = Math.max(
+        1,
+        Math.min(2400, across * 32, Math.floor(Math.sqrt(12_000_000 / aspect))),
+      );
+      draw(canvas.current, mosaic, width);
+    }
   }, [mosaic, tint]);
   const used = mosaic?.counts.filter((n) => n > 0).length || 0;
   const percent = mosaic?.ids.length
@@ -1130,6 +1170,7 @@ function App() {
               backgroundReady={library.backgroundReady}
               onChange={refresh}
               onDirtyChange={setPieceDirty}
+              defaults={{ columns, variety, blend: tint }}
               onChoosePortrait={() => goToPage("mosaic")}
             />
           ) : (
@@ -1147,7 +1188,9 @@ function App() {
                       {generating
                         ? "Updating your mosaic…"
                         : mosaic
-                          ? `${mosaic.columns} × ${mosaic.rows} tiles`
+                          ? mosaic.layers
+                            ? `${mosaic.layers.length} mosaiced pieces`
+                            : `${mosaic.columns} × ${mosaic.rows} tiles`
                           : "YOUR PORTRAIT, REIMAGINED"}
                     </span>
                   </div>
@@ -1248,7 +1291,7 @@ function App() {
                     </span>
                     <strong className="selected-text">
                       {mosaic
-                        ? `${mosaic.activeTiles.toLocaleString()} ${mosaic.maskUrl ? mosaic.mosaicRegion + " " : ""}${mosaic.layers ? "grid cells" : "tiles"}`
+                        ? `${mosaic.activeTiles.toLocaleString()} ${mosaic.maskUrl ? mosaic.mosaicRegion + " " : ""}${mosaic.layers ? "placements" : "tiles"}`
                         : ""}
                     </strong>
                   </div>
@@ -1315,6 +1358,65 @@ function App() {
                 </section>
               </div>
               <aside className="studio-controls">
+                {hasPieces && tuningProject && (
+                  <section className="control-card piece-studio-controls">
+                    <h3>
+                      <SlidersHorizontal size={18} />
+                      Piece settings
+                    </h3>
+                    {tuningProject.pieces
+                      .filter((piece) => piece.mode === "mosaic")
+                      .map((piece, index) => (
+                        <details
+                          className="piece-studio-setting"
+                          key={piece.id}
+                          open={index === 0}
+                        >
+                          <summary>{piece.name}</summary>
+                          <PieceSettings
+                            name={piece.name}
+                            settings={piece}
+                            defaults={{ columns, variety, blend: tint }}
+                            onSave={async (settings) => {
+                              await api("/pieces/" + piece.id, "PATCH", {
+                                projectId: tuningProject.id,
+                                ...settings,
+                              });
+                              await refresh();
+                            }}
+                          />
+                        </details>
+                      ))}
+                    {tuningProject.remainder_mode === "mosaic" && (
+                      <details
+                        className="piece-studio-setting"
+                        open={
+                          !tuningProject.pieces.some(
+                            (piece) => piece.mode === "mosaic",
+                          )
+                        }
+                      >
+                        <summary>Everything else</summary>
+                        <PieceSettings
+                          name="Everything else"
+                          settings={{
+                            columns: tuningProject.remainder_columns,
+                            variety: tuningProject.remainder_variety,
+                            blend: tuningProject.remainder_blend,
+                          }}
+                          defaults={{ columns, variety, blend: tint }}
+                          onSave={async (settings) => {
+                            await api("/project/options", "POST", {
+                              projectId: tuningProject.id,
+                              ...settings,
+                            });
+                            await refresh();
+                          }}
+                        />
+                      </details>
+                    )}
+                  </section>
+                )}
                 <section className="control-card">
                   <h3>
                     <ImagePlus size={18} />
@@ -1512,8 +1614,14 @@ function App() {
                 <section className="control-card">
                   <h3>
                     <SlidersHorizontal size={18} />
-                    Make it yours
+                    {hasPieces ? "Studio defaults" : "Make it yours"}
                   </h3>
+                  {hasPieces && (
+                    <p className="control-tip mb-4">
+                      Used by pieces with “Use studio defaults” enabled. Custom
+                      piece settings are saved independently.
+                    </p>
+                  )}
                   <label className="slider-label">
                     Tile resolution <strong>{columns} across</strong>
                   </label>
@@ -1607,8 +1715,10 @@ function App() {
                       try {
                         const c = document.createElement("canvas");
                         if (
-                          (exportSize * exportSize * mosaic.rows) /
-                            mosaic.columns >
+                          exportSize *
+                            exportSize *
+                            (mosaic.aspectRatio ??
+                              mosaic.rows / mosaic.columns) >
                           80_000_000
                         )
                           throw new Error(

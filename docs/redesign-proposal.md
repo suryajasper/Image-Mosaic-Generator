@@ -1,6 +1,6 @@
 # Photo groups and portrait pieces
 
-Research and proposal, October 5, 2026. The implementation now includes named directory groups, persistent portrait pieces, MobileSAM selection with manual refinement, and per-piece group matching. The research notes below describe the design rationale; per-piece resolution/variety overrides remain future work.
+Research and proposal, October 5, 2026. The implementation now includes named directory groups, persistent portrait pieces, MobileSAM selection with manual refinement, and per-piece group matching. The research notes below describe the design rationale; independent resolution, variety, and color blend controls are also implemented.
 
 ## Recommended experience
 
@@ -32,7 +32,7 @@ Three workspaces: Library, Portrait pieces, and Mosaic studio.
 | Suit | Mosaic | Friends, Extended family |
 | Background | Keep original | — |
 
-Each piece chooses Mosaic or Keep original and one or more photo groups. Use shared resolution, variety, and color blend initially, with optional per-piece overrides as a later extension. One aligned tile grid keeps adjoining pieces consistent; each piece's tiles are clipped to its mask, including boundary tiles.
+Each piece chooses Mosaic or Keep original and one or more photo groups. Each piece can use independent resolution, variety, and color blend values or inherit studio defaults. Each piece has its own square tile grid clipped to its mask, including boundary tiles.
 
 Show unique photos used and placement counts per piece, per group, and for the overall portrait. Combined unique counts deduplicate shared photos. A tiled piece with no eligible selected photos must show a specific error rather than borrow from other groups silently.
 

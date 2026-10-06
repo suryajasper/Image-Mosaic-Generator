@@ -134,6 +134,75 @@ class LocalLibraryTests(unittest.TestCase):
         # An old editor cannot overwrite the new mask revision.
         self.assertEqual(self.client.patch('/api/pieces/'+face,json={'projectId':key,'revision':0,'mask':self.mask_payload(project,(0,0,w,h))}).status_code,400)
 
+    def test_independent_piece_tuning_and_default_inheritance(self):
+        self.scan()
+        self.client.post('/api/target',json={'path':str(self.folder/'a.jpg')})
+        project=self.client.get('/api/project').json
+        key=project['id'];w,h=project['width'],project['height']
+        face=self.client.post('/api/pieces',json={'projectId':key,'name':'Face'}).json['id']
+        suit=self.client.post('/api/pieces',json={'projectId':key,'name':'Suit'}).json['id']
+        for piece,box,settings in ((face,(0,0,w//2,h),{'columns':12,'variety':0,'blend':0}),(suit,(w//2,0,w,h),{'columns':24,'variety':1,'blend':.65})):
+            response=self.client.patch('/api/pieces/'+piece,json={'projectId':key,'revision':0,'mask':self.mask_payload(project,box),**settings})
+            self.assertEqual(response.status_code,200)
+        result=self.client.post('/api/mosaic',json={'columns':60,'variety':.35,'blend':.2}).json
+        first,second=result['layers']
+        self.assertEqual((first['columns'],first['rows'],first['variety'],first['blend']),(12,10,0,0))
+        self.assertEqual((second['columns'],second['rows'],second['variety'],second['blend']),(24,20,1,.65))
+        self.assertEqual(len(first['tiles']),120)
+        self.assertEqual(len(second['tiles']),480)
+        self.assertEqual(first['activeTiles'],60)
+        self.assertEqual(second['activeTiles'],240)
+        self.assertEqual(second['counts'],[120,120])
+        self.assertEqual(sum(result['counts']),300)
+        self.assertEqual(result['activeTiles'],300)
+        self.assertEqual(result['aspectRatio'],.8)
+        # Defaults cannot override customized pieces, and changing one piece leaves the other stable.
+        other=self.client.post('/api/mosaic',json={'columns':80,'variety':.9,'blend':.5}).json
+        self.assertEqual(first,other['layers'][0])
+        self.assertEqual(second,other['layers'][1])
+        self.client.patch('/api/pieces/'+face,json={'projectId':key,'columns':18,'variety':.2,'blend':.3})
+        tuned=self.client.post('/api/mosaic',json={'columns':60}).json
+        self.assertEqual(second,tuned['layers'][1])
+        saved=next(p for p in self.client.get('/api/project').json['pieces'] if p['id']==face)
+        self.assertEqual((saved['columns'],saved['variety'],saved['blend']),(18,.2,.3))
+        # Reset restores live inheritance, including zero variety/blend values.
+        self.client.patch('/api/pieces/'+face,json={'projectId':key,'columns':None,'variety':None,'blend':None})
+        inherited=self.client.post('/api/mosaic',json={'columns':36,'variety':0,'blend':0}).json['layers'][0]
+        self.assertEqual((inherited['columns'],inherited['variety'],inherited['blend']),(36,0,0))
+
+    def test_custom_grid_limits_do_not_depend_on_studio_defaults(self):
+        self.scan()
+        path=self.folder/'tall.png';Image.new('RGB',(100,1000),'blue').save(path)
+        self.client.post('/api/target',json={'path':str(path)})
+        project=self.client.get('/api/project').json
+        piece=self.client.post('/api/pieces',json={'projectId':project['id'],'name':'Tall piece'}).json['id']
+        self.client.patch('/api/pieces/'+piece,json={'projectId':project['id'],'columns':12,'variety':1,'revision':0,'mask':self.mask_payload(project,(0,0,100,1000))})
+        result=self.client.post('/api/mosaic',json={'columns':160})
+        self.assertEqual(result.status_code,200)
+        self.assertEqual((result.json['layers'][0]['columns'],result.json['layers'][0]['rows']),(12,120))
+        self.client.patch('/api/pieces/'+piece,json={'projectId':project['id'],'columns':160})
+        rejected=self.client.post('/api/mosaic',json={'columns':12})
+        self.assertEqual(rejected.status_code,400)
+        self.assertIn('Tall piece',rejected.json['error'])
+
+    def test_remainder_tuning_and_invalid_values(self):
+        self.scan()
+        self.client.post('/api/target',json={'path':str(self.folder/'a.jpg')})
+        project=self.client.get('/api/project').json
+        group=self.client.get('/api/library').json['groups'][0]['id']
+        key=project['id']
+        response=self.client.post('/api/project/options',json={'projectId':key,'mode':'mosaic','groups':[group],'columns':18,'variety':1,'blend':.4})
+        self.assertEqual(response.status_code,200)
+        layer=self.client.post('/api/mosaic',json={'columns':60,'variety':0,'blend':0}).json['layers'][0]
+        self.assertEqual((layer['columns'],layer['rows'],layer['variety'],layer['blend']),(18,15,1,.4))
+        self.assertEqual(layer['counts'],[135,135])
+        saved=self.client.get('/api/project').json
+        self.assertEqual(saved['remainder_blend'],.4)
+        piece=self.client.post('/api/pieces',json={'projectId':key,'name':'Face'}).json['id']
+        for bad in ({'columns':11},{'columns':161},{'columns':12.5},{'variety':-1},{'variety':True},{'variety':1.01},{'blend':-.01},{'blend':.66}):
+            self.assertEqual(self.client.patch('/api/pieces/'+piece,json={'projectId':key,**bad}).status_code,400)
+            self.assertEqual(self.client.post('/api/project/options',json={'projectId':key,**bad}).status_code,400)
+
     def test_selection_prompt_validation_and_local_candidates(self):
         from unittest.mock import patch
         self.scan()

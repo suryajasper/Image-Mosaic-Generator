@@ -457,8 +457,12 @@ def mosaic():
         target = conn.execute("SELECT value FROM settings WHERE key='target'").fetchone()
         settings = dict(conn.execute('SELECT key,value FROM settings').fetchall())
         region = settings.get('mosaicRegion', 'foreground' if settings.get('foreground') == '1' else 'all')
+    blend = data.get('blend', .2)
+    pieces.validate_settings({'blend': blend})
+    if blend is None:
+        raise ValueError('A default portrait color blend is required.')
     if target:
-        result = pieces.render_project(target[0], rows, columns, variety, int(data.get('seed', 42)), db, open_photo, thumbnail, match_tiles, DATA)
+        result = pieces.render_project(target[0], rows, columns, variety, int(data.get('seed', 42)), db, open_photo, thumbnail, match_tiles, DATA, blend)
         if result is not None:
             return jsonify(result)
     if not rows or not target:
