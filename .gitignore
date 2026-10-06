@@ -119,3 +119,6 @@ webpackcache.js
 # confidential
 users.json
 credentials.json
+# Local-only photo metadata and Python environment
+.mosaic/
+.venv/

@@ -1,0 +1,2 @@
+# Optional local background-removal engine (Python 3.10+).
+rembg[cpu]==2.0.67
