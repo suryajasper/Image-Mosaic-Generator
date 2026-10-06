@@ -92,3 +92,30 @@ test("two-finger touch pinches zoom without panning, then resume single-finger p
   send(element, "pointermove", { pointerId: 1, clientX: 20, clientY: 0 });
   assert.equal(element.scrollLeft, -10);
 });
+
+test("selection editor keeps ownership of brush pointers while sharing pinch cancellation", () => {
+  const element = new Viewport(),
+    factors = [];
+  const cleanup = attachCanvasGestures(
+    element,
+    (factor) => factors.push(factor),
+    true,
+    false,
+  );
+  send(element, "pointerdown", {
+    pointerId: 1,
+    pointerType: "mouse",
+    button: 0,
+    clientX: 0,
+    clientY: 0,
+  });
+  send(element, "pointermove", { pointerId: 1, clientX: 100, clientY: 100 });
+  assert.equal(element.scrollLeft, 0);
+  assert.equal(element.scrollTop, 0);
+  assert.equal(
+    send(element, "wheel", { deltaY: -10, deltaMode: 0 }).defaultPrevented,
+    true,
+  );
+  assert.ok(factors[0] > 1);
+  cleanup();
+});

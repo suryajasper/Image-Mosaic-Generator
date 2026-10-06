@@ -1,0 +1,31 @@
+import type { PieceTuning } from "../PieceSettings";
+import type { PieceEffect } from "../piece-effects";
+export type Group = { id: string; name: string; status: string };
+export type Piece = PieceTuning & {
+  id: string;
+  name: string;
+  mode: "mosaic" | "original";
+  groups: string[];
+  maskUrl: string;
+  mask_revision: number;
+  prompts?: { points: Point[]; box: number[] | null };
+};
+export type Project = {
+  id: string;
+  width: number;
+  height: number;
+  enabled: number;
+  stale: boolean;
+  imageUrl: string;
+  pieces: Piece[];
+  remainder_mode: "mosaic" | "original";
+  remainder_groups: string[];
+  remainder_columns: number | null;
+  remainder_variety: number | null;
+  remainder_blend: number | null;
+  remainder_effect: PieceEffect | null;
+  selectionReady: boolean;
+  selectionAvailable: boolean;
+};
+export type Point = { x: number; y: number; include: number };
+export type Tool = "include" | "exclude" | "box" | "paint" | "erase" | "pan";

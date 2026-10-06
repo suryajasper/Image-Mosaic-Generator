@@ -78,6 +78,23 @@ The first scan/generation of a large collection is slower because originals must
 
 `.mosaic/library.sqlite` stores local paths, photo groups, selections, normalized crop coordinates, rotations, portrait pieces, and their settings. `.mosaic/pieces` stores selection masks and immutable render assets. `.mosaic/cache` contains converted JPEGs and square thumbnails. HEIC conversions are indexed by a SHA-256 fingerprint of the original file contents, so the same image can reuse its conversion after a restart, copy, or filesystem-identifier change. Existing conversions from older versions are recovered using saved photo identity and matching file size/mtime; this migration does not reconvert originals. Both are ignored by Git. Keep `.mosaic` alongside the original photo directories to preserve work; deleting the database resets edits. Set `MOSAIC_DATA_DIR` to an absolute directory to keep this data elsewhere. Changing that location starts a separate library.
 
+## Code structure
+
+The frontend entry point is `src/main.tsx`; `App.tsx` coordinates navigation and shared state. Feature folders keep views and their supporting code together:
+
+- `src/library/`: photo library and group management.
+- `src/pieces/`: piece models, selection tools, group picker, and selection canvas renderer.
+- `src/studio/`: preview, usage, portrait/default controls, PNG export, shared mosaic renderer, and image cache.
+- `src/hooks/`: library workflows, piece editing, mosaic generation, and preview fullscreen.
+- `src/components/`: reusable dialogs, navigation layout, crop editor, and zoom controls.
+- `src/styles/`: base styles, feature styles, and responsive overrides. `style.css` imports these in cascade order.
+
+Preview and export share `studio/renderer.ts`. `studio/image-cache.ts` loads only used photos, bounds decoding concurrency, deduplicates requests, and upgrades tiles for zoom/export. Shared canvas gestures cancel page pinch zoom; the selection editor retains ownership of brush pointers. The fullscreen preview fills the app viewport and closes with Escape, including in embedded browsers. Dialogs contain keyboard focus, restore it on dismissal, and keep crop actions visible on short screens.
+
+The Python entry point `server/server.py` assembles the Flask app, loopback protections, route blueprints, and piece routes. `storage.py` owns database initialization and local paths; `file_identity.py`, `conversions.py`, and `photo_service.py` own image identity, HEIC caching, and crop thumbnails. Library, portrait, and mosaic routes live in their respective `*_routes.py` modules. Piece persistence, validation, routes, and rendering are separate modules; `pieces.py` provides their public entry points. `matching.py`, `arrangements.py`, and `effects.py` keep tile selection and preset construction independent of HTTP handlers.
+
+Existing SQLite tables, API URLs, cached filenames, and normalized crop coordinates remain compatible. TypeScript checks unused imports and bindings as part of the production build. Use Prettier for frontend formatting and Ruff for Python formatting.
+
 ## Checks
 
 ```sh

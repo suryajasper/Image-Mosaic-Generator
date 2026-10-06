@@ -1,0 +1,160 @@
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: #25302080;
+  backdrop-filter: blur(5px);
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.modal {
+  width: 640px;
+  max-height: 95vh;
+  overflow: auto;
+  padding: 27px;
+  background: #fffef9;
+  border-radius: 12px;
+  box-shadow: 0 20px 80px #0003;
+}
+
+.icon-button {
+  padding: 6px;
+  color: #7f8b74;
+}
+
+.crop-stage {
+  height: 450px;
+  background: #e7e9e1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 23px 0 12px;
+  overflow: hidden;
+  border-radius: 7px;
+}
+
+.crop-image {
+  position: relative;
+  overflow: hidden;
+}
+
+.crop-image canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.crop-square {
+  position: absolute;
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 700px #15201785;
+  cursor: move;
+  touch-action: none;
+}
+
+.crop-grid {
+  width: 100%;
+  height: 100%;
+  background:
+    linear-gradient(
+      to right,
+      transparent 33%,
+      #fff5 33%,
+      #fff5 33.5%,
+      transparent 33.5%,
+      transparent 66%,
+      #fff5 66%,
+      #fff5 66.5%,
+      transparent 66.5%
+    ),
+    linear-gradient(
+      to bottom,
+      transparent 33%,
+      #fff5 33%,
+      #fff5 33.5%,
+      transparent 33.5%,
+      transparent 66%,
+      #fff5 66%,
+      #fff5 66.5%,
+      transparent 66.5%
+    );
+}
+
+.conversion-modal {
+  max-width: 520px;
+}
+
+.conversion-modal p {
+  line-height: 1.8;
+}
+
+.conversion-list {
+  max-height: 180px;
+  overflow: auto;
+  font-size: 11px;
+  color: #8b987e;
+  background: #f0f3e8;
+  padding: 15px;
+  border-radius: 6px;
+  margin: 20px 0;
+  line-height: 1.9;
+}
+
+.crop-modal {
+  width: 960px;
+}
+
+.crop-editor-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 260px;
+  gap: 24px;
+}
+
+.crop-resolution-preview {
+  margin-top: 23px;
+  padding: 20px 16px;
+  border: 1px solid #dfe5d6;
+  background: #f4f6ee;
+  border-radius: 7px;
+  align-self: start;
+}
+
+.crop-resolution-preview h3 {
+  margin: 9px 0 17px;
+}
+
+.crop-preview-frame {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  aspect-ratio: 1;
+  background: #e6eadf;
+  border-radius: 5px;
+  overflow: hidden;
+}
+
+.crop-preview-frame canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  image-rendering: pixelated;
+}
+
+.preview-pixel-count {
+  text-align: center;
+  margin-top: 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #6c815d;
+}
+
+.crop-resolution-preview p {
+  line-height: 1.8;
+}
+
+.crop-modal .crop-stage {
+  height: 360px;
+}

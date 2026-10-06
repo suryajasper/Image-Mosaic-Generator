@@ -21,6 +21,7 @@ export function attachCanvasGestures(
   element: HTMLElement,
   zoomBy: (factor: number) => void,
   enabled: boolean,
+  pointerGestures = true,
 ) {
   const pointers = new Map<number, { x: number; y: number }>();
   let gestureScale: number | null = null;
@@ -90,11 +91,17 @@ export function attachCanvasGestures(
     ["pointercancel", up as EventListener],
     ["lostpointercapture", up as EventListener],
   ];
-  listeners.forEach(([name, handler]) =>
+  const activeListeners = pointerGestures
+    ? listeners
+    : listeners.filter(
+        ([name]) =>
+          !name.startsWith("pointer") && name !== "lostpointercapture",
+      );
+  activeListeners.forEach(([name, handler]) =>
     element.addEventListener(name, handler, { passive: false }),
   );
   return () =>
-    listeners.forEach(([name, handler]) =>
+    activeListeners.forEach(([name, handler]) =>
       element.removeEventListener(name, handler),
     );
 }

@@ -452,7 +452,7 @@ class LocalLibraryTests(unittest.TestCase):
             if isinstance(path,(str,Path)) and Path(path).suffix.lower() in server.HEIC:
                 raise AssertionError('Cached HEIC must not be decoded again')
             return original_open(path,*args,**kwargs)
-        with patch.object(server,'identity',side_effect=lambda p:'f'*24 if Path(p)==heic else original_identity(p)), patch.object(server.Image,'open',side_effect=without_heic_decode):
+        with patch.object(server.conversions,'identity',side_effect=lambda p:'f'*24 if Path(p)==heic else original_identity(p)), patch.object(server.Image,'open',side_effect=without_heic_decode):
             result=self.scan()
             self.assertEqual(result.status_code,200)
             self.assertNotIn('needsConversion',result.json)
