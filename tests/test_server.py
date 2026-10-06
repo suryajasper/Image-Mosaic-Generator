@@ -17,6 +17,8 @@ class LocalLibraryTests(unittest.TestCase):
         self.folder = Path(self.tmp.name)
         self.client = server.app.test_client()
         with server.db() as conn:
+            for table in ('pieces','projects','group_photos','groups'):
+                conn.execute('DELETE FROM ' + table)
             conn.execute('DELETE FROM photos')
             conn.execute('DELETE FROM settings')
             conn.execute('DELETE FROM portraits')
@@ -49,6 +51,147 @@ class LocalLibraryTests(unittest.TestCase):
         self.assertEqual(next(p for p in restored if p['path']==str(new))['size'],.4)
         Image.new('RGB',(20,20),'red').save(self.folder/'new.jpg');self.scan()
         self.assertEqual(len(self.client.get('/api/library').json['photos']),3)
+
+    def test_multiple_groups_preserve_crops_and_deduplicate_overlaps(self):
+        self.scan(name='Family')
+        first=self.client.get('/api/library').json['photos'][0]
+        self.client.patch('/api/photos/'+first['id'],json={'size':.4,'rotation':90})
+        nested=self.folder/'Friends';nested.mkdir()
+        Image.new('RGB',(50,50),'blue').save(nested/'friend.png')
+        self.scan()
+        self.client.post('/api/import',json={'path':str(nested),'name':'Friends'})
+        library=self.client.get('/api/library').json
+        self.assertEqual(len(library['groups']),2)
+        self.assertEqual(len(library['photos']),3)
+        shared=next(p for p in library['photos'] if p['name']=='friend.png')
+        self.assertEqual(len(shared['groups']),2)
+        self.assertEqual(server.photo(first['id'])['size'],.4)
+        friend_group=next(g for g in library['groups'] if g['name']=='Friends')
+        self.client.patch('/api/groups/'+friend_group['id'],json={'name':'Old friends'})
+        self.client.delete('/api/groups/'+friend_group['id'])
+        self.assertEqual(len(self.client.get('/api/library').json['photos']),3)
+        self.client.post('/api/import',json={'path':str(nested)})
+        restored=next(g for g in self.client.get('/api/library').json['groups'] if g['id']==friend_group['id'])
+        self.assertEqual(restored['name'],'Old friends')
+        # Taking one directory offline retains membership and corrections.
+        moved=nested.with_name('offline');nested.rename(moved)
+        response=self.client.post('/api/import',json={'path':str(nested)})
+        self.assertTrue(response.json['unavailable'])
+        group=next(g for g in self.client.get('/api/library').json['groups'] if g['id']==friend_group['id'])
+        self.assertEqual(group['status'],'unavailable')
+        moved.rename(nested)
+        self.client.post('/api/import',json={'path':str(nested)})
+        self.assertEqual(server.photo(first['id'])['rotation'],90)
+
+    def mask_payload(self,project,box):
+        import base64,io
+        image=Image.new('L',(project['width'],project['height']),0)
+        image.paste(255,box)
+        output=io.BytesIO();image.save(output,'PNG')
+        return 'data:image/png;base64,'+base64.b64encode(output.getvalue()).decode()
+
+    def test_pieces_match_only_assigned_groups_and_preserve_overlap_priority(self):
+        self.scan(name='Family')
+        family=self.client.get('/api/library').json['groups'][0]['id']
+        other=self.folder/'friends';other.mkdir()
+        Image.new('RGB',(50,50),'blue').save(other/'friend.png')
+        self.client.post('/api/import',json={'path':str(other),'name':'Friends'})
+        library=self.client.get('/api/library').json
+        friends=next(g for g in library['groups'] if g['name']=='Friends')['id']
+        friend=next(p for p in library['photos'] if p['name']=='friend.png')['id']
+        self.client.post('/api/target',json={'path':str(self.folder/'a.jpg')})
+        project=self.client.get('/api/project').json
+        key=project['id'];w,h=project['width'],project['height']
+        face=self.client.post('/api/pieces',json={'projectId':key,'name':'Face'}).json['id']
+        suit=self.client.post('/api/pieces',json={'projectId':key,'name':'Suit'}).json['id']
+        self.assertEqual(self.client.patch('/api/pieces/'+face,json={'projectId':key,'groups':[family],'mode':'original','revision':0,'mask':self.mask_payload(project,(0,0,w//2,h))}).status_code,200)
+        self.assertEqual(self.client.patch('/api/pieces/'+suit,json={'projectId':key,'groups':[friends],'revision':0,'mask':self.mask_payload(project,(0,0,w,h))}).status_code,200)
+        result=self.client.post('/api/mosaic',json={'columns':12,'variety':1}).json
+        self.assertEqual(result['mosaicRegion'],'pieces')
+        self.assertEqual(len(result['layers']),1)
+        layer=result['layers'][0]
+        self.assertEqual(layer['name'],'Suit')
+        self.assertEqual(layer['activeTiles'],60)
+        self.assertEqual(sum(result['counts']),60)
+        self.assertEqual(result['counts'][result['ids'].index(friend)],60)
+        self.assertTrue(all(i==result['ids'].index(friend) for i in layer['tiles'] if i>=0))
+        import io
+        with self.client.get(layer['maskUrl']) as response:
+            with Image.open(io.BytesIO(response.data)) as mask:
+                self.assertEqual(mask.getpixel((0,0))[3],0)
+                self.assertEqual(mask.getpixel((w-1,0))[3],255)
+        with self.client.get(result['backgroundUrl']) as response:
+            self.assertEqual(response.status_code,200)
+        # Reordering makes the Suit own the entire frame.
+        self.client.post('/api/project/order',json={'projectId':key,'ids':[suit,face]})
+        full=self.client.post('/api/mosaic',json={'columns':12,'variety':1}).json
+        self.assertEqual(full['activeTiles'],120)
+        # Empty pool errors name the piece rather than borrowing another group's photos.
+        self.client.patch('/api/pieces/'+suit,json={'projectId':key,'groups':[]})
+        response=self.client.post('/api/mosaic',json={'columns':12})
+        self.assertEqual(response.status_code,400)
+        self.assertIn('Suit',response.json['error'])
+        # An old editor cannot overwrite the new mask revision.
+        self.assertEqual(self.client.patch('/api/pieces/'+face,json={'projectId':key,'revision':0,'mask':self.mask_payload(project,(0,0,w,h))}).status_code,400)
+
+    def test_selection_prompt_validation_and_local_candidates(self):
+        from unittest.mock import patch
+        self.scan()
+        self.client.post('/api/target',json={'path':str(self.folder/'a.jpg')})
+        project=self.client.get('/api/project').json
+        points=[{'x':.5,'y':.5,'include':1}]
+        with patch.object(server.pieces.segmentation,'predict',return_value=([Image.new('L',(100,80),255)],{'prepareSeconds':0,'promptSeconds':0})) as predict:
+            result=self.client.post('/api/project/select',json={'projectId':project['id'],'points':points})
+            self.assertEqual(result.status_code,200)
+            self.assertEqual(predict.call_args.args[2],points)
+            with self.client.get(result.json['masks'][0]) as response:
+                self.assertEqual(response.status_code,200)
+            self.assertEqual(self.client.post('/api/project/select',json={'projectId':project['id'],'points':[{'x':2,'y':.5,'include':1}]}).status_code,400)
+            self.assertEqual(self.client.post('/api/project/select',json={'projectId':project['id'],'box':[.5,.5,.1,.1]}).status_code,400)
+            self.assertEqual(predict.call_count,1)
+        piece=self.client.post('/api/pieces',json={'projectId':project['id'],'name':'Face'}).json['id']
+        response=self.client.patch('/api/pieces/'+piece,json={'projectId':project['id'],'mask':self.mask_payload(project,(0,0,50,80)),'revision':0,'prompts':{'points':points,'box':None}})
+        self.assertEqual(response.status_code,200)
+        self.assertEqual(self.client.get('/api/project').json['pieces'][0]['prompts']['points'],points)
+
+    def test_portrait_pieces_restore_and_detect_changed_sources(self):
+        self.scan()
+        path=str(self.folder/'a.jpg')
+        self.client.post('/api/target',json={'path':path})
+        project=self.client.get('/api/project').json
+        piece=self.client.post('/api/pieces',json={'projectId':project['id'],'name':'Face'}).json['id']
+        self.client.post('/api/target',json={'path':str(self.folder/'b.png')})
+        self.assertEqual(self.client.get('/api/project').json['pieces'],[])
+        self.assertEqual(self.client.post('/api/project/options',json={'projectId':project['id'],'mode':'mosaic'}).status_code,400)
+        self.client.post('/api/target',json={'path':path})
+        self.assertEqual(self.client.get('/api/project').json['pieces'][0]['id'],piece)
+        Image.new('RGB',(80,60),'green').save(path)
+        self.assertTrue(self.client.get('/api/project').json['stale'])
+        self.assertEqual(self.client.post('/api/mosaic',json={'columns':12}).status_code,400)
+        self.client.post('/api/project/reset',json={'projectId':project['id'],'reuse':True})
+        restored=self.client.get('/api/project').json
+        self.assertFalse(restored['stale'])
+        self.assertEqual(restored['pieces'][0]['mask_revision'],1)
+        self.assertEqual(restored['width'],80)
+
+    def test_remainder_uses_union_without_duplicate_photos(self):
+        self.scan()
+        self.client.post('/api/target',json={'path':str(self.folder/'a.jpg')})
+        project=self.client.get('/api/project').json
+        group=self.client.get('/api/library').json['groups'][0]['id']
+        response=self.client.post('/api/project/options',json={'projectId':project['id'],'mode':'mosaic','groups':[group,group]})
+        self.assertEqual(response.status_code,200)
+        result=self.client.post('/api/mosaic',json={'columns':12,'variety':1}).json
+        self.assertEqual(len(result['ids']),2)
+        self.assertEqual(result['counts'],[60,60])
+        self.assertEqual(result['pieceUsage'][0]['name'],'Everything else')
+        self.client.delete('/api/groups/'+group)
+        self.assertEqual(self.client.post('/api/project/options',json={'projectId':project['id'],'mode':'original'}).status_code,200)
+        # An entirely untiled portrait can render without memory photos.
+        self.client.post('/api/selection',json={'selected':False})
+        original=self.client.post('/api/mosaic',json={'columns':12}).json
+        self.assertEqual(original['layers'],[])
+        self.assertEqual(original['activeTiles'],0)
 
     def test_matching_counts_and_determinism(self):
         pixels=np.tile([100.,100.,100.],(200,1));colors=np.array([[100.,100.,100.],[110.,110.,110.],[120.,120.,120.]])

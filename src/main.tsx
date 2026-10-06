@@ -21,6 +21,8 @@ import {
   Minimize,
 } from "lucide-react";
 import "./style.css";
+import { api } from "./api";
+import { PieceEditor } from "./PieceEditor";
 import { cropDragUpdate } from "./crop-drag";
 import { attachCanvasGestures } from "./canvas-gestures";
 
@@ -34,8 +36,18 @@ type Photo = {
   y: number;
   size: number;
   revision: number;
+  groups: string[];
+};
+type Group = {
+  id: string;
+  name: string;
+  path: string;
+  status: string;
+  photoCount: number;
+  selectedCount: number;
 };
 type Library = {
+  groups: Group[];
   photos: Photo[];
   folder: string;
   target: string | null;
@@ -45,6 +57,7 @@ type Library = {
   backgroundAvailable: boolean;
 };
 type Scan = {
+  unavailable?: boolean;
   imported: number;
   skipped: string[];
   needsConversion?: string[];
@@ -61,27 +74,31 @@ type Mosaic = {
   maskUrl: string | null;
   backgroundUrl: string | null;
   activeTiles: number;
-  mosaicRegion: "all" | "foreground" | "background";
+  layers?: {
+    id: string;
+    name: string;
+    maskUrl: string;
+    tiles: number[];
+    colors: number[][];
+    counts: number[];
+    activeTiles: number;
+  }[];
+  pieceUsage?: {
+    id: string;
+    name: string;
+    used: number;
+    eligible: number;
+    activeTiles: number;
+  }[];
+  groupUsage?: {
+    id: string;
+    name: string;
+    used: number;
+    eligible: number;
+    placements: number;
+  }[];
+  mosaicRegion: "all" | "foreground" | "background" | "pieces";
 };
-async function api<T>(
-  path: string,
-  method = "GET",
-  body?: unknown,
-): Promise<T> {
-  const response = await fetch("/api" + path, {
-    method,
-    headers: body ? { "Content-Type": "application/json" } : undefined,
-    body: body ? JSON.stringify(body) : undefined,
-  });
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({}));
-    throw new Error(
-      error.error ||
-        "Could not reach the local server. Make sure Python is running.",
-    );
-  }
-  return response.json();
-}
 const photoURL = (p: Photo) => `/api/photos/${p.id}/image?v=${p.revision}`;
 const loadImage = (url: string) =>
   new Promise<HTMLImageElement>((resolve, reject) => {
@@ -365,6 +382,7 @@ function CropEditor({
 function App() {
   const [library, setLibrary] = useState<Library>({
     photos: [],
+    groups: [],
     folder: "",
     target: null,
     foreground: false,
@@ -372,7 +390,19 @@ function App() {
     backgroundReady: false,
     backgroundAvailable: false,
   });
-  const [page, setPage] = useState<"photos" | "mosaic">("photos");
+  const [page, setPage] = useState<"photos" | "pieces" | "mosaic">("photos");
+  const [groupFilter, setGroupFilter] = useState("all");
+  const [groupName, setGroupName] = useState("");
+  const [hasPieces, setHasPieces] = useState(false);
+  const [pieceDirty, setPieceDirty] = useState(false);
+  const [pendingPage, setPendingPage] = useState<
+    "photos" | "pieces" | "mosaic" | null
+  >(null);
+  function goToPage(next: "photos" | "pieces" | "mosaic") {
+    if (page === "pieces" && pieceDirty && next !== "pieces")
+      setPendingPage(next);
+    else setPage(next);
+  }
   const [folder, setFolder] = useState("");
   const [target, setTarget] = useState("");
   const [portraitFolder, setPortraitFolder] = useState("");
@@ -479,6 +509,10 @@ function App() {
     setLibrary(lib);
     if (lib.folder) setFolder(lib.folder);
     setTarget(lib.target || "");
+    if (lib.target) {
+      const project = await api<{ enabled: number }>("/project");
+      setHasPieces(!!project.enabled);
+    } else setHasPieces(false);
     if (lib.target)
       setPortraitFolder(
         (previous) =>
@@ -488,7 +522,7 @@ function App() {
   useEffect(() => {
     refresh().catch((e) => setError(e.message));
   }, []);
-  async function action(fn: () => Promise<void>) {
+  async function action(fn: () => Promise<unknown>) {
     setBusy(true);
     setError("");
     try {
@@ -509,10 +543,11 @@ function App() {
       path,
       convert,
       skipHeic,
+      name: endpoint === "/import" ? groupName || undefined : undefined,
     });
     if (result.needsConversion) {
       setConversion({ path, endpoint, files: result.needsConversion });
-      return;
+      return false;
     }
     if (endpoint === "/portraits") {
       setPortraitOptions(result.options || []);
@@ -522,9 +557,10 @@ function App() {
     } else {
       await refresh();
       setNotice(
-        `Library updated: ${result.imported} photos.${result.skipped.length ? " Skipped unreadable files: " + result.skipped.join(", ") : ""}`,
+        `Group updated: ${result.imported} photos.${result.unavailable ? " Folder unavailable; saved edits are retained." : ""}${result.skipped.length ? " Skipped unreadable files: " + result.skipped.join(", ") : ""}`,
       );
     }
+    return true;
   }
   async function choosePortrait(path: string) {
     const result = await api<{ needsConversion?: string[] }>(
@@ -547,14 +583,28 @@ function App() {
   // Rescan saved folder on return to the app. Unchanged files require only a stat check.
   useEffect(() => {
     const rescan = () => {
-      if (library.folder && !busy && !conversion && !editing)
-        action(() => scan(library.folder));
+      if (
+        library.groups.length &&
+        !busy &&
+        !conversion &&
+        !editing &&
+        page === "photos"
+      )
+        action(async () => {
+          for (const group of library.groups) {
+            if (!(await scan(group.path))) break;
+          }
+        });
     };
     window.addEventListener("focus", rescan);
     return () => window.removeEventListener("focus", rescan);
-  }, [library.folder, busy, conversion, editing]);
+  }, [library.groups, busy, conversion, editing, page]);
   const selected = library.photos.filter((p) => p.selected);
-  const shown = library.photos.filter(
+  const groupPhotos = library.photos.filter(
+    (p) => groupFilter === "all" || p.groups.includes(groupFilter),
+  );
+  const groupSelected = groupPhotos.filter((p) => p.selected);
+  const shown = groupPhotos.filter(
     (p) =>
       p.name.toLowerCase().includes(search.toLowerCase()) &&
       (filter === "all" || (filter === "selected" ? p.selected : !p.selected)),
@@ -568,7 +618,7 @@ function App() {
     const version = ++requestVersion.current;
     setMosaic(null);
     setSavedExport(null);
-    if (!selected.length || !library.target) {
+    if ((!selected.length && !hasPieces) || !library.target) {
       setGenerating(false);
       return;
     }
@@ -580,6 +630,12 @@ function App() {
           variety,
           seed,
         });
+        await Promise.all(
+          (result.layers || []).map(async (layer) => {
+            if (!images.current.has(layer.maskUrl))
+              images.current.set(layer.maskUrl, await loadImage(layer.maskUrl));
+          }),
+        );
         if (result.maskUrl && !images.current.has(result.maskUrl)) {
           images.current.set(result.maskUrl, await loadImage(result.maskUrl));
         }
@@ -618,27 +674,57 @@ function App() {
       clearTimeout(timer);
       requestVersion.current++;
     };
-  }, [page, library, columns, variety, seed]);
+  }, [page, library, columns, variety, seed, hasPieces]);
   function draw(c: HTMLCanvasElement, m: Mosaic, width: number) {
     const tile = width / m.columns;
     c.width = width;
     c.height = Math.round(m.rows * tile);
     const ctx = c.getContext("2d")!;
-    m.tiles.forEach((index, i) => {
-      if (index < 0) return;
-      const x = (i % m.columns) * tile,
-        y = Math.floor(i / m.columns) * tile,
-        img = images.current.get(m.ids[index] + ":" + m.revisions[index]);
-      if (img) ctx.drawImage(img, x, y, tile + 0.5, tile + 0.5);
-      if (tint > 0) {
-        ctx.fillStyle = `rgba(${m.colors[i].join(",")},${tint})`;
-        ctx.fillRect(x, y, tile + 0.5, tile + 0.5);
+    const drawTiles = (
+      context: CanvasRenderingContext2D,
+      tiles: number[],
+      colors: number[][],
+    ) => {
+      tiles.forEach((index, i) => {
+        if (index < 0) return;
+        const x = (i % m.columns) * tile,
+          y = Math.floor(i / m.columns) * tile,
+          img = images.current.get(m.ids[index] + ":" + m.revisions[index]);
+        if (img) context.drawImage(img, x, y, tile + 0.5, tile + 0.5);
+        if (tint > 0) {
+          context.fillStyle = `rgba(${colors[i].join(",")},${tint})`;
+          context.fillRect(x, y, tile + 0.5, tile + 0.5);
+        }
+      });
+    };
+    if (m.layers) {
+      const original = m.backgroundUrl && images.current.get(m.backgroundUrl);
+      if (!original)
+        throw new Error("The original portrait could not be loaded.");
+      ctx.drawImage(original, 0, 0, c.width, c.height);
+      const layerCanvas = document.createElement("canvas");
+      layerCanvas.width = c.width;
+      layerCanvas.height = c.height;
+      const layerContext = layerCanvas.getContext("2d")!;
+      for (const layer of m.layers) {
+        layerContext.clearRect(0, 0, c.width, c.height);
+        drawTiles(layerContext, layer.tiles, layer.colors);
+        const mask = images.current.get(layer.maskUrl);
+        if (!mask)
+          throw new Error("A portrait-piece mask could not be loaded.");
+        layerContext.globalCompositeOperation = "destination-in";
+        layerContext.drawImage(mask, 0, 0, c.width, c.height);
+        layerContext.globalCompositeOperation = "source-over";
+        ctx.drawImage(layerCanvas, 0, 0);
       }
-    });
+      return;
+    }
+    drawTiles(ctx, m.tiles, m.colors);
     if (m.maskUrl) {
       const mask = images.current.get(m.maskUrl);
       if (!mask) throw new Error("The foreground mask could not be loaded.");
-      ctx.globalCompositeOperation = m.mosaicRegion === "background" ? "destination-out" : "destination-in";
+      ctx.globalCompositeOperation =
+        m.mosaicRegion === "background" ? "destination-out" : "destination-in";
       ctx.drawImage(mask, 0, 0, c.width, c.height);
       const background = m.backgroundUrl && images.current.get(m.backgroundUrl);
       if (!background)
@@ -655,7 +741,9 @@ function App() {
       draw(canvas.current, mosaic, Math.min(2400, mosaic.columns * 32));
   }, [mosaic, tint]);
   const used = mosaic?.counts.filter((n) => n > 0).length || 0;
-  const percent = mosaic ? Math.round((used / mosaic.ids.length) * 100) : 0;
+  const percent = mosaic?.ids.length
+    ? Math.round((used / mosaic.ids.length) * 100)
+    : 0;
   return (
     <div className="app">
       <aside className="sidebar">
@@ -671,15 +759,21 @@ function App() {
         <nav>
           <button
             className={page === "photos" ? "active" : ""}
-            onClick={() => setPage("photos")}
+            onClick={() => goToPage("photos")}
           >
             <Images size={19} />
             Photo library
             <span className="nav-count">{library.photos.length}</span>
           </button>
           <button
+            className={page === "pieces" ? "active" : ""}
+            onClick={() => goToPage("pieces")}
+          >
+            <SlidersHorizontal size={19} /> Portrait pieces
+          </button>
+          <button
             className={page === "mosaic" ? "active" : ""}
-            onClick={() => setPage("mosaic")}
+            onClick={() => goToPage("mosaic")}
           >
             <Grid2X2 size={19} />
             Mosaic studio
@@ -707,7 +801,11 @@ function App() {
           <div className="breadcrumb">
             Workspace <span>/</span>{" "}
             <strong>
-              {page === "photos" ? "Photo library" : "Mosaic studio"}
+              {page === "photos"
+                ? "Photo library"
+                : page === "pieces"
+                  ? "Portrait pieces"
+                  : "Mosaic studio"}
             </strong>
           </div>
           <span className="local-badge">
@@ -720,21 +818,27 @@ function App() {
               <span className="eyebrow">
                 {page === "photos"
                   ? "EVERY PHOTO, A MEMORY"
-                  : "SMALL MOMENTS. ONE BEAUTIFUL PICTURE."}
+                  : page === "pieces"
+                    ? "CHOOSE WHAT EACH PIECE TELLS"
+                    : "SMALL MOMENTS. ONE BEAUTIFUL PICTURE."}
               </span>
               <h1>
                 {page === "photos"
                   ? "Your collection of moments"
-                  : "Bring the memories together"}
+                  : page === "pieces"
+                    ? "A portrait, piece by piece"
+                    : "Bring the memories together"}
               </h1>
               <p>
                 {page === "photos"
                   ? "Choose the photos that tell his story. Make each little moment count."
-                  : "Build a portrait from the people, places, and moments that made a life."}
+                  : page === "pieces"
+                    ? "Select named pieces and choose the memories for each one."
+                    : "Build a portrait from the people, places, and moments that made a life."}
               </p>
             </div>
             {page === "photos" && (
-              <button className="primary" onClick={() => setPage("mosaic")}>
+              <button className="primary" onClick={() => goToPage("mosaic")}>
                 Open mosaic studio <ArrowRight size={17} />
               </button>
             )}
@@ -765,7 +869,7 @@ function App() {
                   <FolderOpen size={26} strokeWidth={1.5} />
                 </div>
                 <div className="flex-1">
-                  <h3>Your local photo folder</h3>
+                  <h3>Add a photo group</h3>
                   <p>
                     Photos stay where they are. We only remember your selections
                     and crops.
@@ -780,6 +884,13 @@ function App() {
                     }}
                   >
                     <input
+                      aria-label="New group name"
+                      placeholder="Group name (optional)"
+                      value={groupName}
+                      onChange={(e) => setGroupName(e.target.value)}
+                      className="group-name-input"
+                    />
+                    <input
                       aria-label="Local photo folder"
                       placeholder="/Users/you/Pictures/Family memories"
                       value={folder}
@@ -787,17 +898,91 @@ function App() {
                     />
                     <button className="secondary" disabled={busy || !folder}>
                       <FolderOpen size={16} />
-                      {busy
-                        ? "Reading folder…"
-                        : library.photos.length
-                          ? "Scan folder"
-                          : "Open folder"}
+                      {busy ? "Reading folder…" : "Add / scan group"}
                     </button>
                   </form>
                   <small>
                     JPG, PNG & local HEIC conversion · Includes subfolders ·
                     Paste a local folder path
                   </small>
+                </div>
+              </section>
+              <section className="group-manager" aria-label="Photo groups">
+                <button
+                  className={
+                    groupFilter === "all" ? "group-all active" : "group-all"
+                  }
+                  onClick={() => setGroupFilter("all")}
+                >
+                  <Images size={17} /> All groups{" "}
+                  <strong>{library.groups.length}</strong>
+                </button>
+                <div className="group-cards">
+                  {library.groups.map((group) => (
+                    <article
+                      key={group.id}
+                      className={
+                        groupFilter === group.id
+                          ? "group-card active"
+                          : "group-card"
+                      }
+                    >
+                      <button
+                        className="group-select"
+                        onClick={() => setGroupFilter(group.id)}
+                        aria-label={"Show group " + group.name}
+                      >
+                        <FolderOpen size={19} />
+                        {group.name}
+                      </button>
+                      <input
+                        key={group.name}
+                        aria-label={"Rename group " + group.name}
+                        defaultValue={group.name}
+                        onBlur={(e) => {
+                          const name = e.target.value.trim();
+                          if (name && name !== group.name)
+                            action(async () => {
+                              await api("/groups/" + group.id, "PATCH", {
+                                name,
+                              });
+                              await refresh();
+                            });
+                        }}
+                      />
+                      <small title={group.path}>{group.path}</small>
+                      <span>
+                        {group.status === "unavailable"
+                          ? "Folder unavailable · edits saved"
+                          : `${group.photoCount} photos · ${group.selectedCount} selected`}
+                      </span>
+                      <div className="flex gap-3 mt-2">
+                        <button
+                          className="text-button"
+                          disabled={busy}
+                          onClick={() => action(() => scan(group.path))}
+                        >
+                          <RefreshCw size={13} /> Scan
+                        </button>
+                        <button
+                          className="text-button"
+                          disabled={busy}
+                          onClick={() =>
+                            action(async () => {
+                              await api("/groups/" + group.id, "DELETE");
+                              setGroupFilter("all");
+                              await refresh();
+                              setNotice(
+                                "Group removed. Photos and saved corrections are kept; add its folder to restore it.",
+                              );
+                            })
+                          }
+                        >
+                          Remove group
+                        </button>
+                      </div>
+                    </article>
+                  ))}
                 </div>
               </section>
               <div className="library-summary">
@@ -832,18 +1017,19 @@ function App() {
                 <div className="flex items-center gap-4">
                   <button
                     className="text-button"
-                    disabled={busy || !library.photos.length}
+                    disabled={busy || !groupPhotos.length}
                     onClick={() =>
                       action(async () => {
                         await api("/selection", "POST", {
-                          selected: selected.length !== library.photos.length,
+                          selected: groupSelected.length !== groupPhotos.length,
+                          ids: groupPhotos.map((p) => p.id),
                         });
                         await refresh();
                       })
                     }
                   >
-                    {selected.length === library.photos.length &&
-                    library.photos.length
+                    {groupSelected.length === groupPhotos.length &&
+                    groupPhotos.length
                       ? "Deselect all"
                       : "Select all"}
                   </button>
@@ -937,6 +1123,15 @@ function App() {
                 preserved. Edits are saved locally and can be changed anytime.
               </div>
             </>
+          ) : page === "pieces" ? (
+            <PieceEditor
+              groups={library.groups}
+              target={library.target}
+              backgroundReady={library.backgroundReady}
+              onChange={refresh}
+              onDirtyChange={setPieceDirty}
+              onChoosePortrait={() => goToPage("mosaic")}
+            />
           ) : (
             <div className="studio">
               <div className="studio-main">
@@ -1038,7 +1233,8 @@ function App() {
                       <h3>Photos in this mosaic</h3>
                     </div>
                     <span className="usage-number">
-                      {mosaic ? used : "—"} <small>/ {selected.length}</small>
+                      {mosaic ? used : "—"}{" "}
+                      <small>/ {mosaic?.ids.length ?? selected.length}</small>
                     </span>
                   </div>
                   <div className="usage-bar">
@@ -1052,10 +1248,42 @@ function App() {
                     </span>
                     <strong className="selected-text">
                       {mosaic
-                        ? `${mosaic.activeTiles.toLocaleString()} ${mosaic.maskUrl ? mosaic.mosaicRegion + " " : ""}tiles`
+                        ? `${mosaic.activeTiles.toLocaleString()} ${mosaic.maskUrl ? mosaic.mosaicRegion + " " : ""}${mosaic.layers ? "grid cells" : "tiles"}`
                         : ""}
                     </strong>
                   </div>
+                  {mosaic?.pieceUsage && (
+                    <div className="piece-usage">
+                      <h4>By portrait piece</h4>
+                      {mosaic.pieceUsage.map((item) => (
+                        <div key={item.id}>
+                          <strong>{item.name}</strong>
+                          <span>
+                            {item.used} / {item.eligible} photos ·{" "}
+                            {item.activeTiles} tiles
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {mosaic?.groupUsage && (
+                    <div className="piece-usage">
+                      <h4>By photo group</h4>
+                      {mosaic.groupUsage.map((item) => (
+                        <div key={item.id}>
+                          <strong>{item.name}</strong>
+                          <span>
+                            {item.used} / {item.eligible} photos ·{" "}
+                            {item.placements} placements
+                          </span>
+                        </div>
+                      ))}
+                      <small>
+                        Photos in overlapping groups appear in both group
+                        totals.
+                      </small>
+                    </div>
+                  )}
                   {mosaic && (
                     <>
                       <p className="muted text-xs mt-5 mb-3">
@@ -1099,73 +1327,112 @@ function App() {
                       alt="Main portrait"
                     />
                   )}
-                  <div className="foreground-control">
-                    <label className="block text-sm font-medium mb-2" htmlFor="mosaic-region">Mosaic area</label>
-                    <select
-                      id="mosaic-region"
-                      className="w-full"
-                      value={library.mosaicRegion}
-                      disabled={busy || generating || !library.target}
-                      onChange={(e) => {
-                        const mosaicRegion = e.target.value;
-                        action(async () => {
-                          await api("/target/options", "POST", { mosaicRegion });
-                          await refresh();
-                        });
-                      }}
-                    >
-                      <option value="all">Whole portrait</option>
-                      <option value="foreground" disabled={!library.backgroundReady}>Foreground only</option>
-                      <option value="background" disabled={!library.backgroundReady}>Background only</option>
-                    </select>
-                    {library.mosaicRegion !== "all" && <p className="muted text-xs mt-3">
-                      {library.mosaicRegion === "foreground" ? "Keep the original background." : "Keep the original person."}
-                    </p>}
-                    {!library.backgroundReady && (
-                      <>
-                        <p className="muted text-xs mt-3">
-                          One-time setup downloads a local model (about 176 MB).
-                          Photo processing then works offline; no photos are
-                          sent.
-                        </p>
-                        <button
-                          className="secondary w-full justify-center mt-3"
-                          disabled={
-                            busy ||
-                            preparingBackground ||
-                            !library.backgroundAvailable
-                          }
-                          onClick={() =>
-                            action(async () => {
-                              setPreparingBackground(true);
-                              try {
-                                await api("/background/setup", "POST", {});
-                                await refresh();
-                              } finally {
-                                setPreparingBackground(false);
-                              }
-                            })
-                          }
+                  <button
+                    className="secondary w-full justify-center mb-4"
+                    onClick={() => goToPage("pieces")}
+                  >
+                    <SlidersHorizontal size={16} />
+                    {hasPieces
+                      ? "Edit portrait pieces"
+                      : "Split into portrait pieces"}
+                  </button>
+                  {hasPieces && (
+                    <p className="control-tip mb-4">
+                      Your named pieces control mosaic areas and photo groups.
+                    </p>
+                  )}
+                  {!hasPieces && (
+                    <div className="foreground-control">
+                      <label
+                        className="block text-sm font-medium mb-2"
+                        htmlFor="mosaic-region"
+                      >
+                        Mosaic area
+                      </label>
+                      <select
+                        id="mosaic-region"
+                        className="w-full"
+                        value={library.mosaicRegion}
+                        disabled={busy || generating || !library.target}
+                        onChange={(e) => {
+                          const mosaicRegion = e.target.value;
+                          action(async () => {
+                            await api("/target/options", "POST", {
+                              mosaicRegion,
+                            });
+                            await refresh();
+                          });
+                        }}
+                      >
+                        <option value="all">Whole portrait</option>
+                        <option
+                          value="foreground"
+                          disabled={!library.backgroundReady}
                         >
-                          {preparingBackground
-                            ? "Preparing local model…"
-                            : "Prepare background removal"}
-                        </button>
-                        {!library.backgroundAvailable && (
+                          Foreground only
+                        </option>
+                        <option
+                          value="background"
+                          disabled={!library.backgroundReady}
+                        >
+                          Background only
+                        </option>
+                      </select>
+                      {library.mosaicRegion !== "all" && (
+                        <p className="muted text-xs mt-3">
+                          {library.mosaicRegion === "foreground"
+                            ? "Keep the original background."
+                            : "Keep the original person."}
+                        </p>
+                      )}
+                      {!library.backgroundReady && (
+                        <>
                           <p className="muted text-xs mt-3">
-                            Install optional dependencies using
-                            requirements-background.txt to enable this feature.
+                            One-time setup downloads a local model (about 176
+                            MB). Photo processing then works offline; no photos
+                            are sent.
                           </p>
-                        )}
-                      </>
-                    )}
-                    {library.foreground && (
-                      <p className="muted text-xs mt-3">
-                        Only tiles in the selected area count toward photo usage. Fine
-                        edges are clipped to the portrait silhouette.
-                      </p>
-                    )}
-                  </div>
+                          <button
+                            className="secondary w-full justify-center mt-3"
+                            disabled={
+                              busy ||
+                              preparingBackground ||
+                              !library.backgroundAvailable
+                            }
+                            onClick={() =>
+                              action(async () => {
+                                setPreparingBackground(true);
+                                try {
+                                  await api("/background/setup", "POST", {});
+                                  await refresh();
+                                } finally {
+                                  setPreparingBackground(false);
+                                }
+                              })
+                            }
+                          >
+                            {preparingBackground
+                              ? "Preparing local model…"
+                              : "Prepare background removal"}
+                          </button>
+                          {!library.backgroundAvailable && (
+                            <p className="muted text-xs mt-3">
+                              Install optional dependencies using
+                              requirements-background.txt to enable this
+                              feature.
+                            </p>
+                          )}
+                        </>
+                      )}
+                      {library.foreground && (
+                        <p className="muted text-xs mt-3">
+                          Only tiles in the selected area count toward photo
+                          usage. Fine edges are clipped to the portrait
+                          silhouette.
+                        </p>
+                      )}
+                    </div>
+                  )}
                   <p className="muted text-sm mb-3">
                     A clear portrait works beautifully. This image sets the
                     shape and colors.
@@ -1281,7 +1548,9 @@ function App() {
                   </div>
                   <p className="control-tip">
                     {variety === 1
-                      ? "Random placement with photo usage as even as possible."
+                      ? hasPieces
+                        ? "Random placement with even photo usage within each piece."
+                        : "Random placement with photo usage as even as possible."
                       : "A little randomness and less repetition help more photos find a place."}
                   </p>
                   <label className="slider-label mt-6">
@@ -1399,6 +1668,37 @@ function App() {
           )}
         </div>
       </main>
+      {pendingPage && (
+        <div className="modal-backdrop">
+          <section
+            className="modal conversion-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Unsaved portrait selection"
+          >
+            <h2>Unsaved selection</h2>
+            <p className="muted">
+              Save your selection in Portrait pieces before leaving, or discard
+              these edits.
+            </p>
+            <div className="flex gap-3 mt-5">
+              <button className="primary" onClick={() => setPendingPage(null)}>
+                Keep editing
+              </button>
+              <button
+                className="secondary"
+                onClick={() => {
+                  setPieceDirty(false);
+                  setPage(pendingPage);
+                  setPendingPage(null);
+                }}
+              >
+                Discard & continue
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
       {conversion && (
         <div className="modal-backdrop">
           <section

@@ -11,6 +11,7 @@ import numpy as np
 from flask import Flask, abort, jsonify, request, send_file, send_from_directory
 from PIL import Image, ImageOps, UnidentifiedImageError
 import background
+import pieces
 from pillow_heif import register_heif_opener
 register_heif_opener()
 
@@ -30,6 +31,14 @@ def db():
     connection.row_factory = sqlite3.Row
     return connection
 
+if (DATA / 'library.sqlite').exists():
+    with db() as source:
+        if not source.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='groups'").fetchone():
+            backups = DATA / 'backups'
+            backups.mkdir(exist_ok=True)
+            with sqlite3.connect(backups / ('before-groups-' + uuid.uuid4().hex + '.sqlite')) as destination:
+                source.backup(destination)
+
 with db() as conn:
     conn.execute('CREATE TABLE IF NOT EXISTS photos (id TEXT PRIMARY KEY, path TEXT UNIQUE, selected INTEGER DEFAULT 1, rotation INTEGER DEFAULT 0, x REAL DEFAULT 0.5, y REAL DEFAULT 0.5, size REAL DEFAULT 1, revision INTEGER DEFAULT 0)')
     conn.execute('CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)')
@@ -38,6 +47,15 @@ with db() as conn:
         if name not in columns:
             conn.execute(f'ALTER TABLE photos ADD COLUMN {name} {declaration}')
     conn.execute('CREATE TABLE IF NOT EXISTS portraits (id TEXT PRIMARY KEY, path TEXT)')
+    conn.execute("CREATE TABLE IF NOT EXISTS groups (id TEXT PRIMARY KEY, name TEXT NOT NULL, path TEXT UNIQUE NOT NULL, status TEXT DEFAULT 'available', enabled INTEGER DEFAULT 1)")
+    conn.execute('CREATE TABLE IF NOT EXISTS group_photos (group_id TEXT, photo_id TEXT, present INTEGER DEFAULT 1, PRIMARY KEY(group_id, photo_id))')
+    if not conn.execute('SELECT 1 FROM groups LIMIT 1').fetchone():
+        saved = conn.execute("SELECT value FROM settings WHERE key='folder'").fetchone()
+        if saved and saved[0]:
+            group_id = uuid.uuid4().hex
+            conn.execute('INSERT INTO groups(id,name,path) VALUES (?,?,?)', (group_id, Path(saved[0]).name, saved[0]))
+            conn.execute('INSERT INTO group_photos SELECT ?,id,1 FROM photos WHERE active=1', (group_id,))
+
 
 @app.before_request
 def local_only():
@@ -95,14 +113,44 @@ def open_photo(row, crop=True):
         image = image.crop((round(left), round(top), round(left + side), round(top + side)))
     return image
 
+def update_active(conn):
+    conn.execute("UPDATE photos SET active=EXISTS(SELECT 1 FROM group_photos gp JOIN groups g ON gp.group_id=g.id WHERE gp.photo_id=photos.id AND gp.present=1 AND g.enabled=1 AND g.status='available')")
+
+
+@app.patch('/api/groups/<group_id>')
+def rename_group(group_id):
+    name = str(request.json.get('name', '')).strip()
+    if not name or len(name) > 100:
+        raise ValueError('Use a group name between 1 and 100 characters.')
+    with lock, db() as conn:
+        if not conn.execute('SELECT 1 FROM groups WHERE id=? AND enabled=1', (group_id,)).fetchone():
+            abort(404)
+        conn.execute('UPDATE groups SET name=? WHERE id=?', (name, group_id))
+    return jsonify(ok=True)
+
+
+@app.delete('/api/groups/<group_id>')
+def remove_group(group_id):
+    with lock, db() as conn:
+        conn.execute('UPDATE groups SET enabled=0 WHERE id=?', (group_id,))
+        update_active(conn)
+    return jsonify(ok=True)
+
+
 @app.get('/api/library')
 def library():
     with db() as conn:
         rows = [dict(r) for r in conn.execute('SELECT * FROM photos WHERE active=1 ORDER BY path')]
         settings = dict(conn.execute('SELECT key,value FROM settings').fetchall())
+        groups = [dict(r) for r in conn.execute("SELECT g.*,COUNT(p.id) AS photoCount,COALESCE(SUM(p.selected),0) AS selectedCount FROM groups g LEFT JOIN group_photos gp ON gp.group_id=g.id AND gp.present=1 LEFT JOIN photos p ON p.id=gp.photo_id WHERE g.enabled=1 GROUP BY g.id ORDER BY g.name")]
+        memberships = list(conn.execute('SELECT gp.photo_id,gp.group_id FROM group_photos gp JOIN groups g ON gp.group_id=g.id WHERE gp.present=1 AND g.enabled=1'))
+    by_photo = {}
+    for photo_id, group_id in memberships:
+        by_photo.setdefault(photo_id, []).append(group_id)
     for row in rows:
+        row['groups'] = by_photo.get(row['id'], [])
         row['name'] = Path(row['path']).name
-    return jsonify(photos=rows, folder=settings.get('folder', ''), target=settings.get('target'), foreground=settings.get('foreground') == '1', mosaicRegion=settings.get('mosaicRegion', 'foreground' if settings.get('foreground') == '1' else 'all'), backgroundReady=background.ready(DATA / 'models'), backgroundAvailable=background.available())
+    return jsonify(groups=groups, photos=rows, folder=settings.get('folder', ''), target=settings.get('target'), foreground=settings.get('foreground') == '1', mosaicRegion=settings.get('mosaicRegion', 'foreground' if settings.get('foreground') == '1' else 'all'), backgroundReady=background.ready(DATA / 'models'), backgroundAvailable=background.available())
 
 def signature(path):
     stat = path.stat()
@@ -137,6 +185,12 @@ def convert(path):
 def import_folder():
     folder = Path(request.json.get('path', '')).expanduser().resolve()
     if not folder.is_dir():
+        with lock, db() as conn:
+            group = conn.execute('SELECT id FROM groups WHERE path=? AND enabled=1', (str(folder),)).fetchone()
+            if group:
+                conn.execute("UPDATE groups SET status='unavailable' WHERE id=?", (group[0],))
+                update_active(conn)
+                return jsonify(imported=0, skipped=[], unavailable=True)
         raise ValueError('Enter an existing folder on this computer.')
     paths = sorted(p.resolve() for p in folder.rglob('*') if p.is_file() and p.suffix.lower() in EXTENSIONS)
     pending = conversion_pending(paths)
@@ -144,7 +198,11 @@ def import_folder():
         return jsonify(needsConversion=pending)
     skipped, imported = [], 0
     with lock, db() as conn:
-        conn.execute('UPDATE photos SET active=0')
+        group = conn.execute('SELECT id FROM groups WHERE path=?', (str(folder),)).fetchone()
+        group_id = group[0] if group else uuid.uuid4().hex
+        name = str(request.json.get('name') or folder.name).strip()[:100]
+        conn.execute("INSERT INTO groups(id,name,path) VALUES (?,?,?) ON CONFLICT(path) DO UPDATE SET status='available',enabled=1", (group_id, name, str(folder)))
+        conn.execute('UPDATE group_photos SET present=0 WHERE group_id=?', (group_id,))
         for path in paths:
             try:
                 if str(path) in pending and not request.json.get('convert'):
@@ -158,9 +216,11 @@ def import_folder():
                     with Image.open(readable) as img:
                         img.verify()
                 conn.execute("INSERT INTO photos (id,path,signature,active) VALUES (?,?,?,1) ON CONFLICT(id) DO UPDATE SET path=excluded.path, active=1, revision=photos.revision + (photos.signature != excluded.signature), signature=excluded.signature", (photo_id, str(path), stamp))
+                conn.execute('INSERT INTO group_photos VALUES (?,?,1) ON CONFLICT(group_id,photo_id) DO UPDATE SET present=1', (group_id, photo_id))
                 imported += 1
             except (OSError, ValueError, UnidentifiedImageError, Image.DecompressionBombError):
                 skipped.append(path.name)
+        update_active(conn)
         conn.execute('INSERT OR REPLACE INTO settings VALUES (?,?)', ('folder', str(folder)))
     return jsonify(imported=imported, skipped=skipped)
 
@@ -239,7 +299,13 @@ def edit(photo_id):
 @app.post('/api/selection')
 def selection():
     with lock, db() as conn:
-        conn.execute('UPDATE photos SET selected=? WHERE active=1', (bool(request.json['selected']),))
+        ids = request.json.get('ids')
+        if ids is None:
+            conn.execute('UPDATE photos SET selected=? WHERE active=1', (bool(request.json['selected']),))
+        else:
+            if not isinstance(ids, list) or len(ids) > 50000:
+                raise ValueError('Invalid photo selection.')
+            conn.executemany('UPDATE photos SET selected=? WHERE id=? AND active=1', [(bool(request.json['selected']), photo_id) for photo_id in ids])
     return jsonify(ok=True)
 
 def thumbnail(row):
@@ -391,6 +457,10 @@ def mosaic():
         target = conn.execute("SELECT value FROM settings WHERE key='target'").fetchone()
         settings = dict(conn.execute('SELECT key,value FROM settings').fetchall())
         region = settings.get('mosaicRegion', 'foreground' if settings.get('foreground') == '1' else 'all')
+    if target:
+        result = pieces.render_project(target[0], rows, columns, variety, int(data.get('seed', 42)), db, open_photo, thumbnail, match_tiles, DATA)
+        if result is not None:
+            return jsonify(result)
     if not rows or not target:
         raise ValueError('Add a portrait and select at least one memory photo first.')
     colors = []
@@ -448,6 +518,8 @@ def download_export(name):
 @app.get('/<path:path>')
 def frontend(path='index.html'):
     return send_from_directory(ROOT / 'dist', path)
+
+pieces.register(app, db, DATA, open_photo, signature, foreground_portrait)
 
 if __name__ == '__main__':
     app.run(host='127.0.0.1', port=8814, debug=False, threaded=True)
