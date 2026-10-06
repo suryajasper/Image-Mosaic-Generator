@@ -1,3 +1,21 @@
+export const MIN_CANVAS_ZOOM = 0.05;
+
+export function stepCanvasZoom(
+  current: number,
+  direction: -1 | 1,
+  maximum: number,
+) {
+  const fineStep = direction === -1 ? current <= 0.5 : current < 0.5;
+  return Math.max(
+    MIN_CANVAS_ZOOM,
+    Math.min(
+      maximum,
+      Math.round((current + direction * (fineStep ? 0.05 : 0.25)) * 1000) /
+        1000,
+    ),
+  );
+}
+
 /** Native, non-passive listeners can cancel the browser's trackpad pinch zoom. */
 export function attachCanvasGestures(
   element: HTMLElement,

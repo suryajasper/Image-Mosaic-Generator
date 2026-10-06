@@ -25,7 +25,11 @@ import { api } from "./api";
 import { PieceSettings, type TuningProject } from "./PieceSettings";
 import { PieceEditor } from "./PieceEditor";
 import { cropDragUpdate } from "./crop-drag";
-import { attachCanvasGestures } from "./canvas-gestures";
+import {
+  attachCanvasGestures,
+  MIN_CANVAS_ZOOM,
+  stepCanvasZoom,
+} from "./canvas-gestures";
 
 type Photo = {
   id: string;
@@ -473,7 +477,8 @@ function App() {
     if (page !== "mosaic" || !viewport.current) return;
     return attachCanvasGestures(
       viewport.current,
-      (factor) => setZoom((z) => Math.max(0.5, Math.min(8, z * factor))),
+      (factor) =>
+        setZoom((z) => Math.max(MIN_CANVAS_ZOOM, Math.min(8, z * factor))),
       !!mosaic,
     );
   }, [page, !!mosaic]);
@@ -1227,14 +1232,14 @@ function App() {
                     <div className="zoom-controls">
                       <button
                         aria-label="Zoom out"
-                        onClick={() => setZoom((z) => Math.max(0.5, z - 0.25))}
+                        onClick={() => setZoom((z) => stepCanvasZoom(z, -1, 8))}
                       >
                         <Minus size={16} />
                       </button>
                       <span>{Math.round(zoom * 100)}%</span>
                       <button
                         aria-label="Zoom in"
-                        onClick={() => setZoom((z) => Math.min(8, z + 0.25))}
+                        onClick={() => setZoom((z) => stepCanvasZoom(z, 1, 8))}
                       >
                         <Plus size={16} />
                       </button>

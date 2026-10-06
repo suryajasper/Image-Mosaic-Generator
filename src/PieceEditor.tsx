@@ -18,6 +18,7 @@ import {
   Hand,
 } from "lucide-react";
 import { api } from "./api";
+import { MIN_CANVAS_ZOOM, stepCanvasZoom } from "./canvas-gestures";
 import {
   PieceSettings,
   type PieceTuning,
@@ -271,7 +272,7 @@ export function PieceEditor({
       if (!gesturing)
         setZoom((v) =>
           Math.max(
-            0.5,
+            MIN_CANVAS_ZOOM,
             Math.min(
               5,
               v * Math.exp(Math.max(-0.4, Math.min(0.4, -event.deltaY * 0.01))),
@@ -288,7 +289,9 @@ export function PieceEditor({
       event.preventDefault();
       const scale = (event as Event & { scale: number }).scale;
       if (Number.isFinite(scale) && scale > 0) {
-        setZoom((v) => Math.max(0.5, Math.min(5, (v * scale) / gestureScale)));
+        setZoom((v) =>
+          Math.max(MIN_CANVAS_ZOOM, Math.min(5, (v * scale) / gestureScale)),
+        );
         gestureScale = scale;
       }
     };
@@ -792,14 +795,14 @@ export function PieceEditor({
             <div className="zoom-controls">
               <button
                 aria-label="Zoom portrait out"
-                onClick={() => setZoom((v) => Math.max(0.5, v - 0.25))}
+                onClick={() => setZoom((v) => stepCanvasZoom(v, -1, 5))}
               >
                 <Minus size={16} />
               </button>
               <span>{Math.round(zoom * 100)}%</span>
               <button
                 aria-label="Zoom portrait in"
-                onClick={() => setZoom((v) => Math.min(5, v + 0.25))}
+                onClick={() => setZoom((v) => stepCanvasZoom(v, 1, 5))}
               >
                 <Plus size={16} />
               </button>
