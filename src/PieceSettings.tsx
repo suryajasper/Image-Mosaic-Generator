@@ -1,6 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 
+import { EffectSettings } from "./EffectSettings";
+import { type PieceEffect } from "./piece-effects";
+
 export type PieceTuning = {
+  effect?: PieceEffect | null;
   columns: number | null;
   variety: number | null;
   blend: number | null;
@@ -22,6 +26,7 @@ export type TuningProject = {
   remainder_columns: number | null;
   remainder_variety: number | null;
   remainder_blend: number | null;
+  remainder_effect: PieceEffect | null;
 };
 
 /** Coalesce slider movement and serialize saves so older requests cannot win. */
@@ -31,7 +36,9 @@ export function PieceSettings({
   defaults,
   disabled = false,
   onSave,
+  sources = [],
 }: {
+  sources?: { id: string; name: string }[];
   name: string;
   settings: PieceTuning;
   defaults: StudioDefaults;
@@ -54,7 +61,12 @@ export function PieceSettings({
       latest.current = settings;
       setDraft(settings);
     }
-  }, [settings.columns, settings.variety, settings.blend]);
+  }, [
+    settings.columns,
+    settings.variety,
+    settings.blend,
+    JSON.stringify(settings.effect),
+  ]);
 
   function flush() {
     if (timer.current) clearTimeout(timer.current);
@@ -138,7 +150,13 @@ export function PieceSettings({
         step={step}
         value={values[key]}
         disabled={disabled}
-        onChange={(event) => change({ ...values, [key]: +event.target.value })}
+        onChange={(event) =>
+          change({
+            ...values,
+            effect: draft.effect,
+            [key]: +event.target.value,
+          })
+        }
         onPointerUp={() => {
           if (timer.current) flush();
         }}
@@ -161,8 +179,13 @@ export function PieceSettings({
           onChange={(event) => {
             change(
               event.target.checked
-                ? { columns: null, variety: null, blend: null }
-                : values,
+                ? {
+                    columns: null,
+                    variety: null,
+                    blend: null,
+                    effect: draft.effect,
+                  }
+                : { ...values, effect: draft.effect },
             );
           }}
         />
@@ -176,6 +199,12 @@ export function PieceSettings({
           100%: random placement, balanced photo usage in this piece.
         </small>
       )}
+      <EffectSettings
+        name={name}
+        sources={sources}
+        effect={draft.effect ?? null}
+        onChange={(effect) => change({ ...draft, effect })}
+      />
       <small role="status">
         {saving
           ? "Saving settings…"

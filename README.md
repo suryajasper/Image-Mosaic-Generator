@@ -38,6 +38,14 @@ Each piece chooses **Mosaic** or **Keep original**, and mosaiced pieces choose o
 
 Each mosaiced piece, including Everything else, has independent resolution, photo variety, and portrait color blend controls in Portrait pieces and Mosaic studio. Moving a slider saves custom settings locally and updates the preview. **Use studio defaults** restores inheritance from the studio’s default sliders; custom settings are unaffected by later default changes. Pieces use their own square tile grids clipped to the same portrait masks. At exactly 100% variety, photo usage differs by at most one placement within each piece's eligible photo pool. That does not enforce equal group quotas or global balance across separate pieces. Preview and PNG export use identical layer masks and tile assignments. Masks use a portrait preview with a maximum dimension of 1,024 pixels, upscaled smoothly for export; inspect fine edges before printing.
 
+### Soft halo treatment
+
+In either piece settings panel, choose **Portrait treatment → Soft halo** on the mosaiced background or Everything else. Choose a saved subject piece under **Halo around**. **Follow silhouette** hugs its selection; **Elliptical** follows an ellipse around the selection's bounds. **Reach** measures outward distance as a percentage of the portrait's shorter side. **Strength** controls how much of the original portrait shows through near the subject. **Reverse transition** keeps photos clearer near the subject and blends them more strongly farther out. The transition adds to the piece's ordinary portrait blend and stays inside its effective mask. It does not change tile assignments or usage counts.
+
+Treatments default to None and persist separately for each portrait piece. Adjusting or reusing a source selection updates the halo automatically. Deleting the source disables dependent treatments. Empty selections must be painted or selected before they can generate a halo. Preview and PNG export share the same local gradient map and compositing renderer.
+
+Preset validation and gradient builders live in `server/effects.py`; frontend configuration, controls, and compositing live in `src/piece-effects.ts` and `src/EffectSettings.tsx`. Additional presets can extend these modules without changing photo matching or piece ownership.
+
 Switching portraits restores the saved pieces for each file. If a portrait source changes externally, review **Reuse masks** or **Reset pieces** before editing or generating. The first group migration creates a database backup under `.mosaic/backups` and preserves existing edits.
 
 ### Optional local smart selection

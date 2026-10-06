@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import "./style.css";
 import { api } from "./api";
+import { drawPieceTreatment, type RenderTreatment } from "./piece-effects";
 import { PieceSettings, type TuningProject } from "./PieceSettings";
 import { PieceEditor } from "./PieceEditor";
 import { cropDragUpdate } from "./crop-drag";
@@ -81,6 +82,7 @@ type Mosaic = {
   backgroundUrl: string | null;
   activeTiles: number;
   layers?: {
+    treatment?: RenderTreatment | null;
     id: string;
     name: string;
     maskUrl: string;
@@ -653,6 +655,14 @@ function App() {
         });
         await Promise.all(
           (result.layers || []).map(async (layer) => {
+            if (
+              layer.treatment &&
+              !images.current.has(layer.treatment.alphaUrl)
+            )
+              images.current.set(
+                layer.treatment.alphaUrl,
+                await loadImage(layer.treatment.alphaUrl),
+              );
             if (!images.current.has(layer.maskUrl))
               images.current.set(layer.maskUrl, await loadImage(layer.maskUrl));
           }),
@@ -745,6 +755,12 @@ function App() {
           layer.colors,
           layer.columns,
           layer.blend,
+        );
+        drawPieceTreatment(
+          layerContext,
+          layer.treatment,
+          original,
+          images.current,
         );
         const mask = images.current.get(layer.maskUrl);
         if (!mask)
@@ -1447,6 +1463,7 @@ function App() {
                         >
                           <summary>{piece.name}</summary>
                           <PieceSettings
+                            sources={tuningProject.pieces}
                             name={piece.name}
                             settings={piece}
                             defaults={{ columns, variety, blend: tint }}
@@ -1471,11 +1488,13 @@ function App() {
                       >
                         <summary>Everything else</summary>
                         <PieceSettings
+                          sources={tuningProject.pieces}
                           name="Everything else"
                           settings={{
                             columns: tuningProject.remainder_columns,
                             variety: tuningProject.remainder_variety,
                             blend: tuningProject.remainder_blend,
+                            effect: tuningProject.remainder_effect,
                           }}
                           defaults={{ columns, variety, blend: tint }}
                           onSave={async (settings) => {

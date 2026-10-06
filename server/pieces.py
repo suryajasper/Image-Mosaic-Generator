@@ -12,6 +12,7 @@ import numpy as np
 from PIL import Image, ImageChops
 from flask import jsonify, request, abort, send_from_directory
 import segmentation
+import effects
 
 _lock = threading.RLock()
 
@@ -28,6 +29,7 @@ def public_piece(row):
     piece = dict(row)
     piece['groups'] = json.loads(piece['groups'])
     piece['prompts'] = json.loads(piece['prompts'])
+    piece['effect'] = json.loads(piece['effect']) if piece.get('effect') else None
     piece['maskUrl'] = f"/api/piece-masks/{piece['id']}-{piece['mask_revision']}.png"
     return piece
 
@@ -74,6 +76,8 @@ def register(app, db, directory, open_photo, signature, foreground_portrait):
             conn.execute("ALTER TABLE pieces ADD COLUMN prompts TEXT DEFAULT '{\"points\":[],\"box\":null}'")
         for table, prefix in (('pieces',''), ('projects','remainder_')):
             fields = {r[1] for r in conn.execute('PRAGMA table_info(' + table + ')')}
+            if prefix + 'effect' not in fields:
+                conn.execute(f'ALTER TABLE {table} ADD COLUMN {prefix}effect TEXT')
             for field, kind in (('columns','INTEGER'), ('variety','REAL'), ('blend','REAL')):
                 name = prefix + field
                 if name not in fields:
@@ -124,6 +128,7 @@ def register(app, db, directory, open_photo, signature, foreground_portrait):
         with db() as conn:
             items = [public_piece(r) for r in conn.execute('SELECT * FROM pieces WHERE project_id=? ORDER BY position,id', (project['id'],))]
         project['remainder_groups'] = json.loads(project['remainder_groups'])
+        project['remainder_effect'] = json.loads(project['remainder_effect']) if project['remainder_effect'] else None
         project.update(pieces=items, stale=project['signature'] != stamp,
                        imageUrl='/api/project/image?project=' + project['id'] + '&v=' + stamp,
                        selectionReady=segmentation.ready(directory / 'models'), selectionAvailable=segmentation.available())
@@ -160,6 +165,11 @@ def register(app, db, directory, open_photo, signature, foreground_portrait):
             updates['remainder_mode'] = data['mode']
         if 'groups' in data:
             updates['remainder_groups'] = group_ids(data['groups'])
+        if 'effect' in data:
+            with db() as conn:
+                source_ids = {r[0] for r in conn.execute('SELECT id FROM pieces WHERE project_id=?', (project['id'],))}
+            effects.validate(data['effect'], source_ids)
+            updates['remainder_effect'] = json.dumps(data['effect']) if data['effect'] else None
         for field in ('columns','variety','blend'):
             if field in data:
                 updates['remainder_' + field] = data[field]
@@ -184,7 +194,7 @@ def register(app, db, directory, open_photo, signature, foreground_portrait):
                     conn.execute('UPDATE pieces SET mask_revision=? WHERE id=?', (updated['mask_revision'], row['id']))
             else:
                 conn.execute('DELETE FROM pieces WHERE project_id=?', (project['id'],))
-                conn.execute("UPDATE projects SET enabled=0,remainder_mode='original',remainder_groups='[]',remainder_columns=NULL,remainder_variety=NULL,remainder_blend=NULL WHERE id=?", (project['id'],))
+                conn.execute("UPDATE projects SET enabled=0,remainder_mode='original',remainder_groups='[]',remainder_columns=NULL,remainder_variety=NULL,remainder_blend=NULL,remainder_effect=NULL WHERE id=?", (project['id'],))
             conn.execute('UPDATE projects SET signature=?,width=?,height=? WHERE id=?', (stamp, image.width, image.height, project['id']))
         return jsonify(ok=True)
 
@@ -213,6 +223,10 @@ def register(app, db, directory, open_photo, signature, foreground_portrait):
                 abort(404)
             row = dict(row)
             validate_settings(data)
+            if 'effect' in data:
+                source_ids = {r[0] for r in conn.execute('SELECT id FROM pieces WHERE project_id=?', (project['id'],))}
+                effects.validate(data['effect'], source_ids)
+                row['effect'] = json.dumps(data['effect']) if data['effect'] else None
             for field in ('columns','variety','blend'):
                 if field in data:
                     row[field] = data[field]
@@ -246,7 +260,7 @@ def register(app, db, directory, open_photo, signature, foreground_portrait):
                     mask.save(mask_path(directory, row))
                 except (IndexError, TypeError, OSError) as error:
                     raise ValueError('Invalid PNG selection mask.') from error
-            conn.execute('UPDATE pieces SET name=?,mode=?,groups=?,mask_revision=?,prompts=?,columns=?,variety=?,blend=? WHERE id=?', (row['name'], row['mode'], row['groups'], row['mask_revision'], row['prompts'], row['columns'], row['variety'], row['blend'], piece_id))
+            conn.execute('UPDATE pieces SET name=?,mode=?,groups=?,mask_revision=?,prompts=?,columns=?,variety=?,blend=?,effect=? WHERE id=?', (row['name'], row['mode'], row['groups'], row['mask_revision'], row['prompts'], row['columns'], row['variety'], row['blend'], row['effect'], piece_id))
         return jsonify(ok=True)
 
     @app.delete('/api/pieces/<piece_id>')
@@ -254,6 +268,11 @@ def register(app, db, directory, open_photo, signature, foreground_portrait):
         project = checked_project()
         with _lock, db() as conn:
             conn.execute('DELETE FROM pieces WHERE id=? AND project_id=?', (piece_id, project['id']))
+            for row in conn.execute('SELECT id,effect FROM pieces WHERE project_id=?', (project['id'],)).fetchall():
+                if row['effect'] and json.loads(row['effect']).get('sourceId') == piece_id:
+                    conn.execute('UPDATE pieces SET effect=NULL WHERE id=?', (row['id'],))
+            if project['remainder_effect'] and json.loads(project['remainder_effect']).get('sourceId') == piece_id:
+                conn.execute('UPDATE projects SET remainder_effect=NULL WHERE id=?', (project['id'],))
         return jsonify(ok=True)
 
     @app.post('/api/project/order')
@@ -317,7 +336,7 @@ def render_project(path, photos, columns, variety, seed, db, open_photo, thumbna
     size = (project['width'], project['height'])
     with _lock:
         masks, remainder = effective_masks(items, size, directory)
-    items.append(dict(id='remainder', name='Everything else', mode=project['remainder_mode'], groups=project['remainder_groups'],columns=project['remainder_columns'],variety=project['remainder_variety'],blend=project['remainder_blend']))
+    items.append(dict(id='remainder', name='Everything else', mode=project['remainder_mode'], groups=project['remainder_groups'],columns=project['remainder_columns'],variety=project['remainder_variety'],blend=project['remainder_blend'],effect=project['remainder_effect']))
     masks.append(remainder)
     # Full-resolution original snapshot avoids applying an old mask to a changed source.
     original_key = hashlib.sha256((path + stamp).encode()).hexdigest()[:32] + '-original.png'
@@ -329,6 +348,7 @@ def render_project(path, photos, columns, variety, seed, db, open_photo, thumbna
     for photo_id, group_id in memberships:
         memberships_by_photo.setdefault(photo_id, set()).add(group_id)
     rgb = portrait.resize(size, Image.Resampling.LANCZOS).convert('RGB')
+    source_masks = {item['id']: mask_path(directory, item) for item in items if item['id'] != 'remainder'}
     for item, mask in zip(items, masks):
         if item['mode'] != 'mosaic':
             continue
@@ -372,7 +392,19 @@ def render_project(path, photos, columns, variety, seed, db, open_photo, thumbna
         if not effective_path.exists():
             # Canvas destination-in uses alpha; store white RGB with mask alpha.
             alpha = Image.new('RGBA',size,(255,255,255,255));alpha.putalpha(mask);alpha.save(effective_path)
-        layers.append(dict(id=item['id'],name=item['name'],columns=piece_columns,rows=piece_rows,variety=piece_variety,blend=piece_blend,maskUrl='/api/piece-masks/'+mask_key,tiles=choices.tolist(),colors=pixels.astype(int).tolist(),counts=mapped_counts.tolist(),activeTiles=int(active.sum())))
+        treatment = None
+        if item.get('effect'):
+            effect = json.loads(item['effect'])
+            effects.validate(effect, source_masks.keys())
+            with Image.open(source_masks[effect['sourceId']]) as source:
+                source = source.convert('L').resize(size, Image.Resampling.BILINEAR)
+                alpha = effects.build(effect, source)
+            key = hashlib.sha256(alpha.tobytes() + str(size).encode()).hexdigest()[:32] + '-effect.png'
+            effect_path = directory / 'pieces' / key
+            if not effect_path.exists():
+                overlay = Image.new('RGBA', size, (255,255,255,255));overlay.putalpha(alpha);overlay.save(effect_path)
+            treatment = dict(preset=effect['preset'],alphaUrl='/api/piece-masks/' + key)
+        layers.append(dict(treatment=treatment,id=item['id'],name=item['name'],columns=piece_columns,rows=piece_rows,variety=piece_variety,blend=piece_blend,maskUrl='/api/piece-masks/'+mask_key,tiles=choices.tolist(),colors=pixels.astype(int).tolist(),counts=mapped_counts.tolist(),activeTiles=int(active.sum())))
         usage.append(dict(id=item['id'],name=item['name'],activeTiles=int(active.sum()),used=int(np.count_nonzero(counts)),eligible=len(eligible)))
     group_usage=[]
     with db() as conn:

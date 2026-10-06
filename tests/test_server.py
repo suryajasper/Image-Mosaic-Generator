@@ -104,6 +104,61 @@ class LocalLibraryTests(unittest.TestCase):
         output=io.BytesIO();image.save(output,'PNG')
         return 'data:image/png;base64,'+base64.b64encode(output.getvalue()).decode()
 
+    def test_halo_falloff_direction_shape_and_validation(self):
+        source = Image.new('L', (100, 100), 0)
+        source.paste(255, (40, 30, 60, 70))
+        effect = dict(preset='soft-halo', sourceId='subject', reach=.2, strength=.6, reverse=False, shape='silhouette')
+        server.pieces.effects.validate(effect, {'subject'})
+        alpha = np.asarray(server.pieces.effects.build(effect, source))
+        self.assertEqual(alpha[50, 60], 152)
+        self.assertGreater(alpha[50, 65], alpha[50, 75])
+        self.assertEqual(alpha[50, 85], 0)
+        inverse = np.asarray(server.pieces.effects.build({**effect, 'reverse': True}, source))
+        self.assertTrue(np.all(np.abs(alpha.astype(int) + inverse.astype(int) - 153) <= 1))
+        wider = np.asarray(server.pieces.effects.build({**effect, 'reach': .4}, source))
+        self.assertGreater(wider[50, 75], alpha[50, 75])
+        ellipse = np.asarray(server.pieces.effects.build({**effect, 'shape': 'ellipse'}, source))
+        self.assertGreater(ellipse[50, 65], ellipse[50, 85])
+        with self.assertRaises(ValueError):
+            server.pieces.effects.validate({**effect, 'strength': float('nan')}, {'subject'})
+        with self.assertRaises(ValueError):
+            server.pieces.effects.validate(effect, {'other'})
+        with self.assertRaises(ValueError):
+            server.pieces.effects.build(effect, Image.new('L', (100, 100), 0))
+
+    def test_halo_persistence_usage_mask_updates_and_source_deletion(self):
+        self.scan()
+        self.client.post('/api/target', json={'path': str(self.folder/'a.jpg')})
+        project = self.client.get('/api/project').json
+        key = project['id']
+        group = self.client.get('/api/library').json['groups'][0]['id']
+        subject = self.client.post('/api/pieces', json={'projectId': key, 'name': 'Subject'}).json['id']
+        self.client.patch('/api/pieces/'+subject, json={'projectId': key, 'mode': 'original', 'revision': 0, 'mask': self.mask_payload(project, (30, 20, 70, 60))})
+        self.client.post('/api/project/options', json={'projectId': key, 'mode': 'mosaic', 'groups': [group]})
+        baseline = self.client.post('/api/mosaic', json={'columns':12, 'variety':1}).json
+        effect = dict(preset='soft-halo', sourceId=subject, reach=.25, strength=.55, reverse=False, shape='silhouette')
+        self.assertEqual(self.client.post('/api/project/options', json={'projectId':key, 'effect':effect}).status_code, 200)
+        self.assertEqual(self.client.get('/api/project').json['remainder_effect'], effect)
+        result = self.client.post('/api/mosaic', json={'columns':12, 'variety':1}).json
+        self.assertEqual(result['counts'], baseline['counts'])
+        self.assertEqual(result['layers'][0]['tiles'], baseline['layers'][0]['tiles'])
+        treatment = result['layers'][0]['treatment']
+        with self.client.get(treatment['alphaUrl']) as response:
+            import io
+            with Image.open(io.BytesIO(response.data)) as alpha:
+                self.assertEqual(alpha.size, (100, 80))
+                self.assertGreater(alpha.getpixel((70, 40))[3], alpha.getpixel((99, 40))[3])
+        self.client.patch('/api/pieces/'+subject, json={'projectId':key, 'revision':1, 'mask':self.mask_payload(project, (10,20,40,60))})
+        changed = self.client.post('/api/mosaic', json={'columns':12}).json
+        self.assertNotEqual(changed['layers'][0]['treatment']['alphaUrl'], treatment['alphaUrl'])
+        bad = self.client.patch('/api/pieces/'+subject, json={'projectId':key, 'effect':{**effect,'sourceId':'foreign'}})
+        self.assertEqual(bad.status_code, 400)
+        self.client.patch('/api/pieces/'+subject, json={'projectId':key, 'effect':effect})
+        self.assertEqual(self.client.get('/api/project').json['pieces'][0]['effect'], effect)
+        self.client.delete('/api/pieces/'+subject, json={'projectId':key})
+        self.assertIsNone(self.client.get('/api/project').json['remainder_effect'])
+        self.assertEqual(self.client.post('/api/mosaic', json={'columns':12}).status_code, 200)
+
     def test_pieces_match_only_assigned_groups_and_preserve_overlap_priority(self):
         self.scan(name='Family')
         family=self.client.get('/api/library').json['groups'][0]['id']

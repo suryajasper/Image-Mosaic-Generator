@@ -25,6 +25,8 @@ import {
   type StudioDefaults,
 } from "./PieceSettings";
 
+import { type PieceEffect } from "./piece-effects";
+
 type Group = { id: string; name: string; status: string };
 type Piece = PieceTuning & {
   id: string;
@@ -48,6 +50,7 @@ type Project = {
   remainder_columns: number | null;
   remainder_variety: number | null;
   remainder_blend: number | null;
+  remainder_effect: PieceEffect | null;
   selectionReady: boolean;
   selectionAvailable: boolean;
 };
@@ -1078,6 +1081,7 @@ export function PieceEditor({
                 )}
               {piece.mode === "mosaic" && (
                 <PieceSettings
+                  sources={project.pieces}
                   name={piece.name}
                   settings={piece}
                   defaults={defaults}
@@ -1136,11 +1140,13 @@ export function PieceEditor({
               )}
             {project.remainder_mode === "mosaic" && (
               <PieceSettings
+                sources={project.pieces}
                 name="Everything else"
                 settings={{
                   columns: project.remainder_columns,
                   variety: project.remainder_variety,
                   blend: project.remainder_blend,
+                  effect: project.remainder_effect,
                 }}
                 defaults={defaults}
                 disabled={busy || project.stale}

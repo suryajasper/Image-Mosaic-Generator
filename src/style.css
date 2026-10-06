@@ -1616,3 +1616,27 @@ select {
   font-weight: 600;
   padding: 3px 0;
 }
+
+.effect-settings {
+  display: grid;
+  gap: 12px;
+  border-top: 1px solid var(--line, #e5e7eb);
+  margin-top: 8px;
+  padding-top: 14px;
+}
+.effect-settings > label:not(.piece-defaults):not(.piece-setting-slider) {
+  display: grid;
+  gap: 6px;
+  font-size: 12px;
+}
+.effect-settings select {
+  width: 100%;
+  padding: 8px;
+  border: 1px solid #deded8;
+  border-radius: 7px;
+  background: white;
+}
+.effect-settings small {
+  color: #777c73;
+  font-size: 11px;
+}
