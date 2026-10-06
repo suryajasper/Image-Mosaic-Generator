@@ -31,6 +31,20 @@ class LocalLibraryTests(unittest.TestCase):
     def scan(self, **extra):
         return self.client.post('/api/import', json={'path': str(self.folder), **extra})
 
+    def test_sharp_tiles_preserve_crop_and_separate_cache_sizes(self):
+        Image.new('RGB', (1800, 1200), 'red').save(self.folder / 'large.jpg')
+        self.scan()
+        photo = next(p for p in self.client.get('/api/library').json['photos'] if p['name'] == 'large.jpg')
+        self.client.patch('/api/photos/' + photo['id'], json={'x': .5, 'y': .5, 'size': .5, 'rotation': 90})
+        import io
+        for size, expected in ((256, 256), (512, 512), (1024, 600)):
+            response = self.client.get(f"/api/photos/{photo['id']}/image?size={size}")
+            self.assertEqual(response.status_code, 200)
+            with Image.open(io.BytesIO(response.data)) as image:
+                self.assertEqual(image.size, (expected, expected))
+            response.close()
+        self.assertEqual(self.client.get(f"/api/photos/{photo['id']}/image?size=9999").status_code, 400)
+
     def test_crop_selection_external_changes_and_restart(self):
         self.assertEqual(self.scan().json['imported'], 2)
         first = self.client.get('/api/library').json['photos'][0]

@@ -358,13 +358,13 @@ def selection():
             conn.executemany('UPDATE photos SET selected=? WHERE id=? AND active=1', [(bool(request.json['selected']), photo_id) for photo_id in ids])
     return jsonify(ok=True)
 
-def thumbnail(row):
+def thumbnail(row, size=256):
     key = hashlib.sha256((row['path'] + signature(Path(row['path'])) + str((row['rotation'], row['x'], row['y'], row['size']))).encode()).hexdigest()
-    destination = CACHE / (key + '-tile.jpg')
+    destination = CACHE / (key + ('-tile.jpg' if size == 256 else f'-tile-{size}.jpg'))
     with lock:
         if not destination.exists():
             image = open_photo(row)
-            image.thumbnail((256, 256))
+            image.thumbnail((size, size))
             image.save(destination, 'JPEG', quality=92)
     return destination
 
@@ -375,7 +375,10 @@ def image(photo_id):
     if not Path(row['path']).is_file():
         abort(404)
     if request.args.get('original') != '1':
-        return send_file(thumbnail(row), mimetype='image/jpeg', max_age=31536000)
+        size = int(request.args.get('size', 256))
+        if size not in (256, 512, 1024):
+            raise ValueError('Photo size must be 256, 512, or 1024.')
+        return send_file(thumbnail(row, size), mimetype='image/jpeg', max_age=31536000)
     image = open_photo(row, False)
     image.thumbnail((1600, 1600))
     output = io.BytesIO()

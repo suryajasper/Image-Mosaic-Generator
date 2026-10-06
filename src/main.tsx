@@ -469,7 +469,9 @@ function App() {
   const [targetVersion, setTargetVersion] = useState(0);
   const canvas = useRef<HTMLCanvasElement>(null);
   const images = useRef<Map<string, HTMLImageElement>>(new Map());
+  const sharpImages = useRef(new Map<string, Promise<void>>());
   const requestVersion = useRef(0);
+  const [previewWidth, setPreviewWidth] = useState(1200);
   const viewport = useRef<HTMLDivElement>(null);
   const previewCard = useRef<HTMLElement>(null);
   const [isFullScreen, setIsFullScreen] = useState(false);
@@ -772,19 +774,85 @@ function App() {
     }
   }
   useEffect(() => {
-    if (mosaic && canvas.current) {
-      const across = Math.max(
-        mosaic.columns,
-        ...(mosaic.layers || []).map((layer) => layer.columns),
+    if (page !== "mosaic" || !viewport.current) return;
+    const element = viewport.current;
+    const observer = new ResizeObserver(() =>
+      setPreviewWidth(element.clientWidth),
+    );
+    observer.observe(element);
+    setPreviewWidth(element.clientWidth);
+    return () => observer.disconnect();
+  }, [page]);
+  function renderWidth(m: Mosaic, requested: number) {
+    const aspect = m.aspectRatio ?? m.rows / m.columns;
+    return Math.max(
+      1,
+      Math.floor(Math.min(requested, 8192, Math.sqrt(24_000_000 / aspect))),
+    );
+  }
+  async function sharpenTiles(m: Mosaic, width: number) {
+    const across = Math.min(
+      m.columns,
+      ...(m.layers || []).map((layer) => layer.columns),
+    );
+    const pixels = width / across;
+    const size = pixels > 512 ? 1024 : pixels > 256 ? 512 : 256;
+    if (size === 256) return;
+    const pending = m.ids
+      .map((id, i) => ({ id, i }))
+      .filter(
+        ({ id, i }) =>
+          m.counts[i] > 0 &&
+          (images.current.get(id + ":" + m.revisions[i])?.width ?? 0) < size,
       );
-      const aspect = mosaic.aspectRatio ?? mosaic.rows / mosaic.columns;
-      const width = Math.max(
-        1,
-        Math.min(2400, across * 32, Math.floor(Math.sqrt(12_000_000 / aspect))),
-      );
-      draw(canvas.current, mosaic, width);
-    }
-  }, [mosaic, tint]);
+    let next = 0;
+    await Promise.all(
+      Array.from({ length: Math.min(6, pending.length) }, async () => {
+        while (next < pending.length) {
+          const { id, i } = pending[next++];
+          const key = id + ":" + m.revisions[i];
+          const requestKey = key + ":" + size;
+          if (!sharpImages.current.has(requestKey)) {
+            const promise = loadImage(
+              `/api/photos/${id}/image?v=${m.revisions[i]}&size=${size}`,
+            )
+              .then((image) => {
+                if (image.width > (images.current.get(key)?.width ?? 0))
+                  images.current.set(key, image);
+              })
+              .catch((error) => {
+                sharpImages.current.delete(requestKey);
+                throw error;
+              });
+            sharpImages.current.set(requestKey, promise);
+          }
+          await sharpImages.current.get(requestKey);
+        }
+      }),
+    );
+  }
+  useEffect(() => {
+    if (!mosaic || !canvas.current) return;
+    const width = renderWidth(
+      mosaic,
+      previewWidth * zoom * Math.min(window.devicePixelRatio || 1, 2),
+    );
+    draw(canvas.current, mosaic, width);
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      sharpenTiles(mosaic, width)
+        .then(() => {
+          if (!cancelled && canvas.current) draw(canvas.current, mosaic, width);
+        })
+        .catch((e) => {
+          if (!cancelled) setError((e as Error).message);
+        });
+    }, 180);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [mosaic, tint, zoom, previewWidth]);
   const used = mosaic?.counts.filter((n) => n > 0).length || 0;
   const percent = mosaic?.ids.length
     ? Math.round((used / mosaic.ids.length) * 100)
@@ -1729,6 +1797,7 @@ function App() {
                           throw new Error(
                             "Choose a smaller export width for this portrait.",
                           );
+                        await sharpenTiles(mosaic, exportSize);
                         draw(c, mosaic, exportSize);
                         const blob = await new Promise<Blob>(
                           (resolve, reject) =>
