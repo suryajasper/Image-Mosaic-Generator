@@ -104,6 +104,71 @@ class LocalLibraryTests(unittest.TestCase):
         output=io.BytesIO();image.save(output,'PNG')
         return 'data:image/png;base64,'+base64.b64encode(output.getvalue()).decode()
 
+    def test_balanced_gradient_organizes_photos_without_changing_quotas(self):
+        import arrangements
+        target = np.repeat(np.linspace(240, 20, 240)[:, None], 3, axis=1)
+        colors = np.repeat(np.linspace(20, 240, 73)[:, None], 3, axis=1)
+        random, counts = arrangements.balanced_gradient(target, colors, 0, 99, True)
+        partial, partial_counts = arrangements.balanced_gradient(target, colors, .6, 99, True)
+        ordered, ordered_counts = arrangements.balanced_gradient(target, colors, 1, 99, True)
+        self.assertLessEqual(int(counts.max() - counts.min()), 1)
+        self.assertTrue((counts > 0).all())
+        np.testing.assert_array_equal(counts, ordered_counts)
+        np.testing.assert_array_equal(counts, partial_counts)
+        score = lambda choices: np.corrcoef(target[:, 0], colors[choices, 0])[0, 1]
+        self.assertGreater(score(ordered), .99)
+        self.assertGreater(score(partial), score(random) + .2)
+        np.testing.assert_array_equal(ordered, arrangements.balanced_gradient(target, colors, 1, 99, True)[0])
+        other = arrangements.balanced_gradient(target, colors, 0, 100, True)[0]
+        self.assertFalse(np.array_equal(random, other))
+        scarce, scarce_counts = arrangements.balanced_gradient(target[:20], colors, 1, 99, True)
+        self.assertEqual(np.count_nonzero(scarce_counts), 20)
+        self.assertEqual(int(scarce_counts.max()), 1)
+        # Palette sorting improves the color match while preserving the exact pool.
+        rng = np.random.default_rng(123)
+        targets, memories = rng.integers(0, 256, (200, 3)), rng.integers(0, 256, (80, 3))
+        start, count = arrangements.balanced_gradient(targets, memories, 0, 42)
+        finish, final_count = arrangements.balanced_gradient(targets, memories, 1, 42)
+        feature = arrangements.color_features
+        loss = lambda choice: np.mean(np.sum((feature(targets) - feature(memories)[choice]) ** 2 * [1, .18, .18], axis=1))
+        self.assertLess(loss(finish), loss(start) * .5)
+        np.testing.assert_array_equal(count, final_count)
+
+    def test_gradient_halo_ignores_portrait_background_and_preserves_masks(self):
+        self.scan()
+        portrait = self.folder/'portrait.jpg'
+        Image.new('RGB', (100, 100), 'red').save(portrait)
+        self.client.post('/api/target', json={'path':str(portrait)})
+        project = self.client.get('/api/project').json
+        key = project['id']; group = self.client.get('/api/library').json['groups'][0]['id']
+        subject = self.client.post('/api/pieces', json={'projectId':key, 'name':'Person'}).json['id']
+        self.client.patch('/api/pieces/'+subject, json={'projectId':key, 'mode':'original', 'revision':0, 'mask':self.mask_payload(project, (30,30,70,70))})
+        effect = dict(preset='balanced-gradient-halo', sourceId=subject, reach=.7, strength=1, reverse=False, shape='silhouette', palette='brightness', innerBrightness=.95, outerBrightness=.05, innerColor='#ffe6a3', outerColor='#142745')
+        self.assertEqual(self.client.post('/api/project/options', json={'projectId':key,'mode':'mosaic','groups':[group],'effect':effect,'variety':0,'blend':.65}).status_code, 200)
+        result = self.client.post('/api/mosaic', json={'columns':12,'variety':0,'blend':.65}).json
+        layer = result['layers'][0]
+        self.assertEqual((layer['variety'], layer['blend']), (1, 0))
+        self.assertIsNone(layer['treatment'])
+        self.assertEqual(layer['arrangement'], 'balanced-gradient-halo')
+        self.assertLessEqual(max(layer['counts']) - min(layer['counts']), 1)
+        self.assertEqual(sum(layer['counts']), layer['activeTiles'])
+        self.assertGreater(layer['tiles'].count(-1), 0)
+        Image.new('RGB', (100, 100), 'blue').save(portrait)
+        self.client.post('/api/project/reset', json={'projectId':key,'reuse':True})
+        changed = self.client.post('/api/mosaic', json={'columns':12,'variety':1,'blend':0}).json['layers'][0]
+        self.assertEqual(layer['tiles'], changed['tiles'])
+        self.assertEqual(layer['colors'], changed['colors'])
+        self.assertEqual(self.client.get('/api/project').json['remainder_effect'], effect)
+        self.assertEqual(self.client.post('/api/project/options', json={'projectId':key,'effect':{**effect,'strength':2}}).status_code, 400)
+        from effects import build
+        mask = Image.new('L', (100,100), 0);mask.paste(255,(30,30,70,70))
+        normal = np.asarray(build(effect, mask))
+        reverse = np.asarray(build({**effect,'reverse':True}, mask))
+        self.assertGreater(normal[50,71,0], normal[0,0,0])
+        self.assertLess(reverse[50,71,0], reverse[0,0,0])
+        custom = build({**effect,'palette':'custom','innerColor':'#ffccaa','outerColor':'#223355'}, mask)
+        self.assertEqual(custom.mode, 'RGB')
+
     def test_halo_falloff_direction_shape_and_validation(self):
         source = Image.new('L', (100, 100), 0)
         source.paste(255, (40, 30, 60, 70))

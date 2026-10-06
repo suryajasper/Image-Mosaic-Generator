@@ -1,4 +1,11 @@
-import { defaultHalo, effectPresets, type PieceEffect } from "./piece-effects";
+import {
+  defaultHalo,
+  defaultGradientHalo,
+  gradientPalettes,
+  effectPresets,
+  type GradientHalo,
+  type PieceEffect,
+} from "./piece-effects";
 export function EffectSettings({
   name,
   effect,
@@ -19,7 +26,11 @@ export function EffectSettings({
           value={effect?.preset ?? "none"}
           onChange={(e) =>
             onChange(
-              e.target.value === "none" ? null : defaultHalo(sources[0].id),
+              e.target.value === "none"
+                ? null
+                : e.target.value === "balanced-gradient-halo"
+                  ? defaultGradientHalo(effect?.sourceId ?? sources[0].id)
+                  : defaultHalo(effect?.sourceId ?? sources[0].id),
             )
           }
         >
@@ -32,7 +43,7 @@ export function EffectSettings({
         </select>
       </label>
       {!sources.length && <small>Create a subject piece to use a halo.</small>}
-      {effect?.preset === "soft-halo" && (
+      {effect && (
         <>
           <label>
             Halo around
@@ -82,13 +93,16 @@ export function EffectSettings({
           </label>
           <label className="piece-setting-slider">
             <span>
-              Strength<strong>{Math.round(effect.strength * 100)}%</strong>
+              {effect.preset === "balanced-gradient-halo"
+                ? "Arrangement strength"
+                : "Strength"}
+              <strong>{Math.round(effect.strength * 100)}%</strong>
             </span>
             <input
-              aria-label={`${name} halo strength`}
+              aria-label={`${name} ${effect.preset === "balanced-gradient-halo" ? "arrangement strength" : "halo strength"}`}
               type="range"
               min="0"
-              max="0.85"
+              max={effect.preset === "balanced-gradient-halo" ? 1 : 0.85}
               step="0.01"
               value={effect.strength}
               onChange={(e) =>
@@ -96,6 +110,83 @@ export function EffectSettings({
               }
             />
           </label>
+          {effect.preset === "balanced-gradient-halo" && (
+            <>
+              <label>
+                Palette
+                <select
+                  aria-label={`${name} gradient palette`}
+                  value={effect.palette}
+                  onChange={(e) =>
+                    onChange({
+                      ...effect,
+                      palette: e.target.value as GradientHalo["palette"],
+                    })
+                  }
+                >
+                  {gradientPalettes.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {(
+                [
+                  ["innerBrightness", "Inner brightness"],
+                  ["outerBrightness", "Outer brightness"],
+                ] as const
+              ).map(([key, label]) => (
+                <label key={key} className="piece-setting-slider">
+                  <span>
+                    {label}
+                    <strong>{Math.round(effect[key] * 100)}%</strong>
+                  </span>
+                  <input
+                    aria-label={`${name} ${label.toLowerCase()}`}
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.01"
+                    value={effect[key]}
+                    onChange={(e) =>
+                      onChange({ ...effect, [key]: +e.target.value })
+                    }
+                  />
+                </label>
+              ))}
+              {effect.palette === "custom" && (
+                <div className="gradient-colors">
+                  <label>
+                    Inner color
+                    <input
+                      aria-label={`${name} inner color`}
+                      type="color"
+                      value={effect.innerColor}
+                      onChange={(e) =>
+                        onChange({ ...effect, innerColor: e.target.value })
+                      }
+                    />
+                  </label>
+                  <label>
+                    Outer color
+                    <input
+                      aria-label={`${name} outer color`}
+                      type="color"
+                      value={effect.outerColor}
+                      onChange={(e) =>
+                        onChange({ ...effect, outerColor: e.target.value })
+                      }
+                    />
+                  </label>
+                </div>
+              )}
+              <small>
+                Balanced photo usage at every strength. 0% is random; 100%
+                organizes all placements. Photos keep their own colors.
+              </small>
+            </>
+          )}
           <label className="piece-defaults">
             <input
               type="checkbox"
@@ -107,9 +198,11 @@ export function EffectSettings({
             Reverse transition
           </label>
           <small>
-            {effect.reverse
-              ? "Photos are clearest near the subject and soften outward."
-              : "Photos soften near the subject and become clearer outward."}
+            {effect.preset === "balanced-gradient-halo"
+              ? "Inner and outer brightness and palette colors follow distance from the selected subject."
+              : effect.reverse
+                ? "Photos are clearest near the subject and soften outward."
+                : "Photos soften near the subject and become clearer outward."}
           </small>
         </>
       )}

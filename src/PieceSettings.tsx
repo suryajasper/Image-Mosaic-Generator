@@ -192,13 +192,24 @@ export function PieceSettings({
         Use studio defaults
       </label>
       {slider("columns", "Resolution", 12, 160, 1)}
-      {slider("variety", "Photo variety", 0, 1, 0.01)}
-      {slider("blend", "Portrait color blend", 0, 0.65, 0.01)}
-      {values.variety === 1 && (
+      {draft.effect?.preset !== "balanced-gradient-halo" && (
+        <>
+          {slider("variety", "Photo variety", 0, 1, 0.01)}
+          {slider("blend", "Portrait color blend", 0, 0.65, 0.01)}
+        </>
+      )}
+      {draft.effect?.preset === "balanced-gradient-halo" && (
         <small>
-          100%: random placement, balanced photo usage in this piece.
+          This preset arranges photos with equal usage and no portrait tint. Use
+          its arrangement strength to tune randomness.
         </small>
       )}
+      {values.variety === 1 &&
+        draft.effect?.preset !== "balanced-gradient-halo" && (
+          <small>
+            100%: random placement, balanced photo usage in this piece.
+          </small>
+        )}
       <EffectSettings
         name={name}
         sources={sources}

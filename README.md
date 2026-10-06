@@ -38,13 +38,21 @@ Each piece chooses **Mosaic** or **Keep original**, and mosaiced pieces choose o
 
 Each mosaiced piece, including Everything else, has independent resolution, photo variety, and portrait color blend controls in Portrait pieces and Mosaic studio. Moving a slider saves custom settings locally and updates the preview. **Use studio defaults** restores inheritance from the studio’s default sliders; custom settings are unaffected by later default changes. Pieces use their own square tile grids clipped to the same portrait masks. At exactly 100% variety, photo usage differs by at most one placement within each piece's eligible photo pool. That does not enforce equal group quotas or global balance across separate pieces. Preview and PNG export use identical layer masks and tile assignments. Masks use a portrait preview with a maximum dimension of 1,024 pixels, upscaled smoothly for export; inspect fine edges before printing.
 
+### Balanced gradient halo
+
+Choose **Portrait treatment → Balanced gradient halo** for the background or Everything else, then choose a saved subject piece under **Halo around**. This preset ignores the portrait's background colors and arranges the memory photos themselves: brighter photos near the subject, darker ones farther out. Brightness-only, cream-to-charcoal, pale-gold-to-navy, rose-to-plum, and custom palettes use photos' natural colors; no tint or portrait overlay is applied. Inner/outer brightness, reach, silhouette/ellipse shape, and reverse direction control the gradient.
+
+Photo allocation is always balanced within the piece's deduplicated eligible pool. Counts differ by at most one; all photos appear when there are enough placements. When there are fewer placements than photos, a seed selects a subset without reuse. **Arrangement strength** organizes that fraction of placements, leaving the remainder random. 0% is balanced random, 100% organizes all placements. **Try another arrangement** changes the seed. Sorting and color-improving swaps preserve the assigned photo counts exactly. The available photos determine how pronounced the natural gradient can be.
+
+The preset replaces ordinary photo variety and portrait blend controls while active; those settings are retained for other treatments. Its assignments and masks are shared by preview and export. Balance is per piece, rather than a global quota across pieces with different photo groups. The matching strategy lives in `server/arrangements.py`, separate from gradient construction in `server/effects.py` and canvas compositing.
+
 ### Soft halo treatment
 
 In either piece settings panel, choose **Portrait treatment → Soft halo** on the mosaiced background or Everything else. Choose a saved subject piece under **Halo around**. **Follow silhouette** hugs its selection; **Elliptical** follows an ellipse around the selection's bounds. **Reach** measures outward distance as a percentage of the portrait's shorter side. **Strength** controls how much of the original portrait shows through near the subject. **Reverse transition** keeps photos clearer near the subject and blends them more strongly farther out. The transition adds to the piece's ordinary portrait blend and stays inside its effective mask. It does not change tile assignments or usage counts.
 
 Treatments default to None and persist separately for each portrait piece. Adjusting or reusing a source selection updates the halo automatically. Deleting the source disables dependent treatments. Empty selections must be painted or selected before they can generate a halo. Preview and PNG export share the same local gradient map and compositing renderer.
 
-Preset validation and gradient builders live in `server/effects.py`; frontend configuration, controls, and compositing live in `src/piece-effects.ts` and `src/EffectSettings.tsx`. Additional presets can extend these modules without changing photo matching or piece ownership.
+Preset validation and gradient builders live in `server/effects.py`; frontend configuration, controls, and compositing live in `src/piece-effects.ts` and `src/EffectSettings.tsx`. Additional presets can provide overlays or arrangement targets and matching strategies without changing piece ownership.
 
 Switching portraits restores the saved pieces for each file. If a portrait source changes externally, review **Reuse masks** or **Reset pieces** before editing or generating. The first group migration creates a database backup under `.mosaic/backups` and preserves existing edits.
 

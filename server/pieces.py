@@ -378,11 +378,27 @@ def render_project(path, photos, columns, variety, seed, db, open_photo, thumbna
                     raise ValueError('A memory photo was removed. Scan its group again.')
                 with Image.open(thumbnail(photos[i])) as tile:
                     colors[i] = np.asarray(tile.resize((1,1),Image.Resampling.BOX))[0,0].astype(float)
+        effect = json.loads(item['effect']) if item.get('effect') else None
+        effect_image = None
+        if effect:
+            effects.validate(effect, source_masks.keys())
+            with Image.open(source_masks[effect['sourceId']]) as source:
+                source = source.convert('L').resize(size, Image.Resampling.BILINEAR)
+                effect_image = effects.build(effect, source)
+        arrangement = effects.is_arrangement(effect)
+        # Arrangement presets use generated targets, ignoring the portrait's background.
+        matching_rgb = effect_image if arrangement else rgb
         # Pillow's premultiplied-alpha resize gives edge colors without adjacent-region contamination.
-        rgba = rgb.convert('RGBA');rgba.putalpha(mask)
+        rgba = matching_rgb.convert('RGBA');rgba.putalpha(mask)
         padded_rgba = Image.new('RGBA', padded_size, (0,0,0,0));padded_rgba.paste(rgba.resize(working_size,Image.Resampling.BOX), (0,0))
         pixels = np.asarray(padded_rgba.resize(grid,Image.Resampling.BOX)).reshape(-1,4)[:,:3].astype(float)
-        local_choices, counts = match_tiles(pixels[active],np.array([colors[i] for i in eligible]),piece_variety,seed + int(hashlib.sha256(item['id'].encode()).hexdigest()[:8],16))
+        piece_seed = seed + int(hashlib.sha256(item['id'].encode()).hexdigest()[:8],16)
+        photo_colors = np.array([colors[i] for i in eligible])
+        if arrangement:
+            local_choices, counts = effects.arrange(effect, pixels[active], photo_colors, piece_seed)
+            piece_variety, piece_blend = 1, 0
+        else:
+            local_choices, counts = match_tiles(pixels[active], photo_colors, piece_variety, piece_seed)
         choices = np.full(piece_columns*piece_rows,-1,dtype=np.int32)
         choices[active] = np.asarray(eligible)[local_choices]
         mapped_counts = np.zeros(len(photos),dtype=np.int64);mapped_counts[eligible] = counts
@@ -393,18 +409,14 @@ def render_project(path, photos, columns, variety, seed, db, open_photo, thumbna
             # Canvas destination-in uses alpha; store white RGB with mask alpha.
             alpha = Image.new('RGBA',size,(255,255,255,255));alpha.putalpha(mask);alpha.save(effective_path)
         treatment = None
-        if item.get('effect'):
-            effect = json.loads(item['effect'])
-            effects.validate(effect, source_masks.keys())
-            with Image.open(source_masks[effect['sourceId']]) as source:
-                source = source.convert('L').resize(size, Image.Resampling.BILINEAR)
-                alpha = effects.build(effect, source)
+        if effect and not arrangement:
+            alpha = effect_image
             key = hashlib.sha256(alpha.tobytes() + str(size).encode()).hexdigest()[:32] + '-effect.png'
             effect_path = directory / 'pieces' / key
             if not effect_path.exists():
                 overlay = Image.new('RGBA', size, (255,255,255,255));overlay.putalpha(alpha);overlay.save(effect_path)
             treatment = dict(preset=effect['preset'],alphaUrl='/api/piece-masks/' + key)
-        layers.append(dict(treatment=treatment,id=item['id'],name=item['name'],columns=piece_columns,rows=piece_rows,variety=piece_variety,blend=piece_blend,maskUrl='/api/piece-masks/'+mask_key,tiles=choices.tolist(),colors=pixels.astype(int).tolist(),counts=mapped_counts.tolist(),activeTiles=int(active.sum())))
+        layers.append(dict(arrangement=effect['preset'] if arrangement else None,treatment=treatment,id=item['id'],name=item['name'],columns=piece_columns,rows=piece_rows,variety=piece_variety,blend=piece_blend,maskUrl='/api/piece-masks/'+mask_key,tiles=choices.tolist(),colors=pixels.astype(int).tolist(),counts=mapped_counts.tolist(),activeTiles=int(active.sum())))
         usage.append(dict(id=item['id'],name=item['name'],activeTiles=int(active.sum()),used=int(np.count_nonzero(counts)),eligible=len(eligible)))
     group_usage=[]
     with db() as conn:

@@ -7,8 +7,40 @@ export type SoftHalo = {
   reverse: boolean;
   shape: "silhouette" | "ellipse";
 };
-export type PieceEffect = SoftHalo;
-export const effectPresets = [{ id: "soft-halo", label: "Soft halo" }] as const;
+export type GradientHalo = Omit<SoftHalo, "preset"> & {
+  preset: "balanced-gradient-halo";
+  innerBrightness: number;
+  outerBrightness: number;
+  palette:
+    "brightness" | "cream-charcoal" | "gold-navy" | "rose-plum" | "custom";
+  innerColor: string;
+  outerColor: string;
+};
+export type PieceEffect = SoftHalo | GradientHalo;
+export const gradientPalettes = [
+  { id: "brightness", label: "Brightness only" },
+  { id: "cream-charcoal", label: "Cream to charcoal" },
+  { id: "gold-navy", label: "Pale gold to navy" },
+  { id: "rose-plum", label: "Rose to plum" },
+  { id: "custom", label: "Custom colors" },
+] as const;
+export const effectPresets = [
+  { id: "balanced-gradient-halo", label: "Balanced gradient halo" },
+  { id: "soft-halo", label: "Soft halo (portrait blend)" },
+] as const;
+export function defaultGradientHalo(sourceId: string): GradientHalo {
+  return {
+    ...defaultHalo(sourceId),
+    preset: "balanced-gradient-halo",
+    strength: 0.75,
+    reach: 0.65,
+    innerBrightness: 0.85,
+    outerBrightness: 0.15,
+    palette: "brightness",
+    innerColor: "#ffe6a3",
+    outerColor: "#142745",
+  };
+}
 export function defaultHalo(sourceId: string): SoftHalo {
   return {
     preset: "soft-halo",
